@@ -102,6 +102,7 @@ uniform vec4 uStormA;         // storm side: coverage, darkness, density, base
 uniform float uStormTop;      // storm side: top (m)
 uniform float uShapeLod;      // debug: >= 0 forces the shape-noise mip level
 uniform float uPixelAngle;    // radians per pixel of the pass (footprint for texture LOD)
+uniform float uDetailFoot;    // erosion detail is marched where a pixel covers less than this (m)
 uniform int uUpSteps;         // steps of the sky-light (upward) march through decks
 // pixel footprint (m) at the current sample; set by the caller before density lookups
 float gFoot = 0.0;
@@ -321,7 +322,7 @@ vec4 marchClouds(vec3 ro, vec3 rd, int steps, int lightSteps, int lightDetail, f
       } else { t += stride; continue; }
     }
     // distance LOD: erosion detail and long light paths are sub-pixel far away
-    bool nearField = t * uPixelAngle < 25.0;
+    bool nearField = t * uPixelAngle < uDetailFoot;
     float sigma = cloudDensityR(p, h, nearField, R, base, top);
     float stepLen = max(fine, min(max(t - 15000.0, 0.0) * 0.005, 150.0) * (64.0 / float(steps))) * (1.0 + t * 0.00004);
     if (sigma > 0.0 && T > 0.05) stepLen = min(stepLen, max(1.2 / sigma, 8.0));
@@ -645,7 +646,7 @@ export class Clouds {
     // reflection probe clouds (amortised via history blend)
     const en = 1 - this.envCur;
     if (full || this.frame % 2 === 1 || u.flash[3] > 0.01) {
-    fullscreen(gl, this.pEnv, { ...skyU, ...cu, ...amb, uCamPos: cam.pos, uFrame: this.reset ? 0 : this.frame, uHistory: this.envTex[this.envCur], uPixelAngle: (2 * Math.PI) / this.envTex[0].w, uUpSteps: 2 }, this.envTargets[en]);
+    fullscreen(gl, this.pEnv, { ...skyU, ...cu, ...amb, uCamPos: cam.pos, uFrame: this.reset ? 0 : this.frame, uHistory: this.envTex[this.envCur], uPixelAngle: (2 * Math.PI) / this.envTex[0].w, uDetailFoot: 25, uUpSteps: 2 }, this.envTargets[en]);
     this.envCur = en;
     }
 
@@ -655,7 +656,7 @@ export class Clouds {
       uInvViewProj: cam.inv, uPrevViewProj: this.prevVP || cam.vp, uCamPos: cam.pos,
       uHistory: this.tex[this.cur], uHistoryD: this.dtex[this.cur], uFrame: this.frame % 64, uBlend: this.reset ? 1 : u.blend ?? 0.2,
       uPrevWindOffset: this.prevWind || u.windOffset,
-      uPixelAngle: (cam.fov || 0.75) / this.h, uUpSteps: u.upSteps ?? 4, uSteps: u.steps ?? 64, uLightSteps: u.lightSteps ?? 6, uLightDetail: u.lightDetail ?? 3, uCheck: u.check ? 1 : 0,
+      uPixelAngle: (cam.fov || 0.75) / this.h, uDetailFoot: u.detailFoot ?? 25, uUpSteps: u.upSteps ?? 4, uSteps: u.steps ?? 64, uLightSteps: u.lightSteps ?? 6, uLightDetail: u.lightDetail ?? 3, uCheck: u.check ? 1 : 0,
     };
     // a full-resolution march is drawn in strips, each flushed on its own: one long draw can exceed the
     // GPU driver's watchdog on integrated GPUs (a reset, or worse)

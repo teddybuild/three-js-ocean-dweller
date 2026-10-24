@@ -19,6 +19,26 @@ const float SUN_COS = 0.99998917; // cos(0.2666 deg)
 float mhash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
 float mnoise(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
   return mix(mix(mhash(i), mhash(i + vec2(1, 0)), f.x), mix(mhash(i + vec2(0, 1)), mhash(i + vec2(1, 1)), f.x), f.y); }
+vec4 cloudBicubic(vec2 uv, vec2 size) {
+  vec2 sp = uv * size - 0.5;
+  vec2 tp = floor(sp) + 0.5;
+  vec2 f = sp - floor(sp);
+  vec2 w0 = f * (-0.5 + f * (1.0 - 0.5 * f));
+  vec2 w1 = 1.0 + f * f * (-2.5 + 1.5 * f);
+  vec2 w2 = f * (0.5 + f * (2.0 - 1.5 * f));
+  vec2 w3 = f * f * (-0.5 + 0.5 * f);
+  vec2 w12 = w1 + w2;
+  vec2 t0 = (tp - 1.0) / size, t3 = (tp + 2.0) / size, t12 = (tp + w2 / w12) / size;
+  vec4 r = texture(uClouds, vec2(t12.x, t0.y)) * w12.x * w0.y
+    + texture(uClouds, vec2(t0.x, t12.y)) * w0.x * w12.y + texture(uClouds, t12) * w12.x * w12.y + texture(uClouds, vec2(t3.x, t12.y)) * w3.x * w12.y
+    + texture(uClouds, vec2(t12.x, t3.y)) * w12.x * w3.y;
+  r /= w12.x * w0.y + w0.x * w12.y + w12.x * w12.y + w3.x * w12.y + w12.x * w3.y;
+  ivec2 ip = ivec2(floor(sp));
+  ivec2 mx = ivec2(size) - 1;
+  vec4 a = texelFetch(uClouds, clamp(ip, ivec2(0), mx), 0), b = texelFetch(uClouds, clamp(ip + ivec2(1, 0), ivec2(0), mx), 0);
+  vec4 c = texelFetch(uClouds, clamp(ip + ivec2(0, 1), ivec2(0), mx), 0), d = texelFetch(uClouds, clamp(ip + ivec2(1, 1), ivec2(0), mx), 0);
+  return clamp(r, min(min(a, b), min(c, d)), max(max(a, b), max(c, d)));
+}
 void main() {
   vec4 ndc = vec4(vUv * 2.0 - 1.0, 1.0, 1.0);
   vec4 w = uInvViewProj * ndc;
@@ -47,11 +67,9 @@ void main() {
     // (edge-aware: taps across a cloud edge, i.e. a different transmittance, get little weight)
     vec2 cts = vec2(textureSize(uClouds, 0));
     vec2 ct = (cts.x < float(textureSize(uSkyView, 0).x) * 4.0 && cts.x * 1.5 < 1.0 / max(fwidth(vUv.x), 1e-6) ? 0.6 : 0.0) / cts;
-    vec4 c0 = texture(uClouds, vUv);
-    vec4 t0 = texture(uClouds, vUv + vec2(-ct.x, -ct.y)), t1 = texture(uClouds, vUv + vec2(ct.x, -ct.y));
-    vec4 t2 = texture(uClouds, vUv + vec2(-ct.x, ct.y)), t3 = texture(uClouds, vUv + vec2(ct.x, ct.y));
-    float w0 = exp(-abs(t0.a - c0.a) * 8.0), w1 = exp(-abs(t1.a - c0.a) * 8.0), w2 = exp(-abs(t2.a - c0.a) * 8.0), w3 = exp(-abs(t3.a - c0.a) * 8.0);
-    vec4 cl = (t0 * w0 + t1 * w1 + t2 * w2 + t3 * w3) / (w0 + w1 + w2 + w3);
+    // a low-resolution buffer is upsampled with Catmull-Rom (sharp: a tent or bilinear filter smears
+    // the billows into mush), clamped to the four nearest texels so edges cannot ring
+    vec4 cl = ct.x > 0.0 ? cloudBicubic(vUv, cts) : texture(uClouds, vUv);
     vec3 sunPart = col - skyRadiance(d);
     vec3 skyCol = skyRadiance(d) + sunPart * cl.a * cl.a;
     // rain and mist lie in front of the clouds only up to the clouds' distance (single scattering:

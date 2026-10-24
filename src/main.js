@@ -22,7 +22,9 @@ const mixv = (a, b, t) => a.map((x, i) => x + (b[i] - x) * t);
 const RENDER_MODE = params.has('render');
 // quality tiers: 'rt' keeps the live app interactive on integrated GPUs, 'high' is for the film
 const QUALITY = {
-  rt: { cloudDiv: 3, steps: 44, lightSteps: 4, lightDetail: 1, blend: 0.14, msaa: 4, hdr: 'r11g11b10f', check: true, fft: [256, 256, 128, 128], angular: 400, upSteps: 2 },
+  // (rt: a third-resolution buffer resolves a 420 m billow out to ~15 km, so its erosion detail is
+  // marched out to a 90 m pixel footprint; full-resolution tiers keep 25 m)
+  rt: { cloudDiv: 2, detailFoot: 50, steps: 80, lightSteps: 5, lightDetail: 2, blend: 0.14, msaa: 4, hdr: 'r11g11b10f', check: true, fft: [256, 256, 128, 128], angular: 400, upSteps: 2 },
   ultra: { cloudDiv: 1, steps: 128, lightSteps: 6, lightDetail: 3, blend: 0.08, msaa: 4, hdr: 'rgba16f', check: false, fft: [512, 256, 256, 256], angular: 640, upSteps: 4 },
   high: { cloudDiv: 1, steps: 96, lightSteps: 6, lightDetail: 3, blend: 0.08, msaa: 4, hdr: 'rgba16f', check: false, fft: [512, 256, 256, 256], angular: 640, upSteps: 4 },
 }[params.get('q') || (RENDER_MODE ? 'high' : 'rt')];
@@ -255,7 +257,7 @@ export class App {
       top: S.cloudBase + 1800 + S.cloudDark * 5200, density: 0.11 - S.cloudDark * 0.05, dark: S.cloudDark,
       front: fOn ? [fn[0], fn[1], fz, S.frontWidth] : [1, 0, 0, 0],
       stormA: [S.sClouds, S.sDark, 0.11 + S.sDark * 0.17, S.sBase], stormTop: S.sBase + 2500 + S.sDark * 8000, // cumulonimbus tops ~9-10 km
-      flash: [lp[0], lp[1], lp[2], flash * (night ? 30 : 0.025)], flashColor: [0.75, 0.8, 1.0], blend: Math.max(QUALITY.blend + (0.85 - QUALITY.blend) * smoothstep(0.02, 0.3, flash), frontBlend), steps: QUALITY.steps,
+      flash: [lp[0], lp[1], lp[2], flash * (night ? 30 : 0.025)], flashColor: [0.75, 0.8, 1.0], blend: Math.max(QUALITY.blend + (0.85 - QUALITY.blend) * smoothstep(0.02, 0.3, flash), frontBlend), steps: QUALITY.steps, detailFoot: QUALITY.detailFoot,
       lightSteps: QUALITY.lightSteps, lightDetail: QUALITY.lightDetail, check: QUALITY.check, upSteps: QUALITY.upSteps,
       shapeLod: params.has('shapelod') ? Number(params.get('shapelod')) : -1,
     };

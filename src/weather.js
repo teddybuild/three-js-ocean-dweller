@@ -15,12 +15,14 @@ export const PRESETS = {
   rain: {
     wind: 11, windDir: 25, fetch: 900, waveScale: 1, choppy: 0.95,
     swellHs: 1.3, swellT: 11, swellDir: 50, swellSpread: 18,
-    clouds: 0.92, cloudDark: 0.45, cloudBase: 900, rain: 0.6, lightning: 0.0, haze: 4, mist: 0.35,
+    // (showers, ~5 mm/h at the camera: a steady downpour hides every cloud and reads as a grey screen)
+    clouds: 0.92, cloudDark: 0.55, cloudBase: 800, rain: 0.1, lightning: 0.0, haze: 1.6, mist: 0.05,
   },
   storm: {
     wind: 21, windDir: 30, fetch: 1500, waveScale: 1, choppy: 1.25,
     swellHs: 2.6, swellT: 13, swellDir: 55, swellSpread: 12,
-    clouds: 0.95, cloudDark: 0.85, cloudBase: 650, rain: 1.0, lightning: 0.7, haze: 5, mist: 0.25,
+    // (a gale with showers under a dark, mottled deck; the rain slider still goes up to a cloudburst)
+    clouds: 0.95, cloudDark: 0.85, cloudBase: 650, rain: 0.08, lightning: 0.7, haze: 1.6, mist: 0.05,
   },
 };
 
