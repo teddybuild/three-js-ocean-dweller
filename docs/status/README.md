@@ -11,8 +11,8 @@ Where the project is right now. Read this first, then the newest handoff.
 
 ## Right now (2026-10-29)
 
-three.js WebGPU port: milestone 0 tagged `port-m0` (`744cd87`), not pushed. Next: milestone 1 (FFT as TSL
-compute). Codex and agy review once at the end of the port; carry-overs in `open/`. Spec: `docs/systems/three-port.md`.
+three.js WebGPU port: `port-m0` and `port-m1` (FFT ocean as TSL compute) tagged, not pushed. Next: milestone 2
+(atmosphere, sky, exposure). Codex and agy review once at the end of the port; carry-overs in `open/`. Spec: `docs/systems/three-port.md`.
 
 ## How to update
 
