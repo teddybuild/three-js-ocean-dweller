@@ -3,6 +3,7 @@
 Every shipped change, newest first: one line each, with its commits. Add a line when a change lands;
 the why and the numbers go in the commit message and the day's `docs/log/` file.
 
+- 2026-10-29 19:20 Port app shell: shared UI, drag/wheel camera, dynamic resolution, film hooks (`render.mjs --engine three`). `f09ae9e`
 - 2026-10-29 19:00 Port review fixes (Codex + agy, no P0): night-flip cloud reset, awaited error scopes, mute key, test gaps. `7b275ef`
 - 2026-10-29 18:40 Port parity: 4x MSAA + centroid, thunder audio, live-path test; all 10 diff scenes 37.3-49.8 dB. `da722f8`
 - 2026-10-29 17:56 Port M5: rain, spray, lightning in TSL (`rain` 43.1 dB, `storm` 41.2 dB); tag `port-m5`. `a86b523`
