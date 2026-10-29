@@ -2,7 +2,7 @@
 
 Where the project is right now. Read this first, then the newest handoff.
 
-- **Newest handoff:** [handoffs/2026-10-29-1650.md](handoffs/2026-10-29-1650.md)
+- **Newest handoff:** [handoffs/2026-10-29-1714.md](handoffs/2026-10-29-1714.md)
 - [open/](open/README.md): open items and design questions, in priority order.
 - [CHANGELOG.md](CHANGELOG.md): every shipped change, newest first, one line each with its commits.
 - [lessons.md](lessons.md) and [rulings.md](rulings.md): traps past sessions hit, and the owner's standing calls. Both
@@ -11,7 +11,7 @@ Where the project is right now. Read this first, then the newest handoff.
 
 ## Right now (2026-10-29)
 
-three.js WebGPU port: `port-m0`..`port-m3` tagged and pushed (M3: water, foam, probe, floating camera; `sea` 33.4 dB vs GL). Next: M4 clouds (`src/three/clouds.ts` was never written: the subagent died with the last session). Codex and agy review once at the end of the port; carry-overs in `open/`. Spec: `docs/systems/three-port.md`.
+three.js WebGPU port: `port-m0`..`port-m3` tagged and pushed; M4a clouds (`cc5a8a8`) pushed, lighting still too bright vs GL. Next: `tools/cloud-diff.mjs` to find the differing input, then tag `port-m4`, then M5 weather fx. Codex and agy review once at the end of the port; carry-overs in `open/`. Spec: `docs/systems/three-port.md`.
 
 ## How to update
 
