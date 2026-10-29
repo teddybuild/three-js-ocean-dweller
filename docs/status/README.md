@@ -2,7 +2,7 @@
 
 Where the project is right now. Read this first, then the newest handoff.
 
-- **Newest handoff:** [handoffs/2026-10-29-1613.md](handoffs/2026-10-29-1613.md)
+- **Newest handoff:** [handoffs/2026-10-29-1650.md](handoffs/2026-10-29-1650.md)
 - [open/](open/README.md): open items and design questions, in priority order.
 - [CHANGELOG.md](CHANGELOG.md): every shipped change, newest first, one line each with its commits.
 - [lessons.md](lessons.md) and [rulings.md](rulings.md): traps past sessions hit, and the owner's standing calls. Both
@@ -11,8 +11,8 @@ Where the project is right now. Read this first, then the newest handoff.
 
 ## Right now (2026-10-29)
 
-three.js WebGPU port: `port-m0`, `port-m1` (FFT), `port-m2` (atmosphere, clear sky, post) tagged and pushed. Next:
-milestone 3 (water). Codex and agy review once at the end of the port; carry-overs in `open/`. Spec: `docs/systems/three-port.md`.
+three.js WebGPU port: `port-m0`..`port-m2` tagged and pushed; M3a (`a0a4f6d`, ocean textures) local only. Next: M3
+water: review and wire the uncommitted `src/three/water.ts`, `foam.ts`, `clouds.ts`, `probe.ts`. Codex and agy review once at the end of the port; carry-overs in `open/`. Spec: `docs/systems/three-port.md`.
 
 ## How to update
 

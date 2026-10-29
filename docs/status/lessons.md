@@ -13,7 +13,8 @@ grouped by topic, merged, never appended blindly. A lesson that can be a check b
 ## Porting to TSL/WGSL (Codex, agy, web-ocean-3d)
 
 - Shared uniforms rewritten between compute dispatches overwrite one UBO before submit: one uniform/ComputeNode per FFT stage.
-- `r16float` storage writes need `texture-formats-tier1`; WGSLNodeBuilder drops the mip level in `textureDimensions()` on storage textures; auto-mips only run on a sampled bind-group update.
+- `r16float` storage writes need `texture-formats-tier1` (use rgba16float); WGSLNodeBuilder drops the mip level in `textureDimensions()` on storage textures; auto-mips only run on a sampled bind-group update, so a store and the first mip-sampling read go in separate `renderer.compute()` calls (`src/three/sky.ts` renderEnv).
+- @types/three 0.186 TSL overloads reject long node chains: import `* as TSL` and destructure `as any`, `type Node = any`. Write LUTs and fields texel by texel in compute (row y = v (y+0.5)/h) so orientation matches GL without flips.
 - `copyTextureToBuffer` pads rows to 256 bytes and three does not strip them: slice per row on readback.
 - `?render` selects quality `high`: FFT sizes 512/256/256/256, not 256/256/128/128.
 - Test the FFT butterfly on the CPU against an O(N^2) DFT with a stage-0 sign check; a magnitude-only check missed web-ocean-3d's twiddle bug.
