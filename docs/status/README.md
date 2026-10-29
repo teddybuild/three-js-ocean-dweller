@@ -11,8 +11,7 @@ Where the project is right now. Read this first, then the newest handoff.
 
 ## Right now (2026-10-29)
 
-three.js WebGPU port: `port-m0`..`port-m2` tagged and pushed; M3a (`a0a4f6d`, ocean textures) local only. Next: M3
-water: review and wire the uncommitted `src/three/water.ts`, `foam.ts`, `clouds.ts`, `probe.ts`. Codex and agy review once at the end of the port; carry-overs in `open/`. Spec: `docs/systems/three-port.md`.
+three.js WebGPU port: `port-m0`..`port-m3` tagged and pushed (M3: water, foam, probe, floating camera; `sea` 33.4 dB vs GL). Next: M4 clouds (`src/three/clouds.ts` was never written: the subagent died with the last session). Codex and agy review once at the end of the port; carry-overs in `open/`. Spec: `docs/systems/three-port.md`.
 
 ## How to update
 

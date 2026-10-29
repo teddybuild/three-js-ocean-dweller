@@ -3,6 +3,7 @@
 Every shipped change, newest first: one line each, with its commits. Add a line when a change lands;
 the why and the numbers go in the commit message and the day's `docs/log/` file.
 
+- 2026-10-29 17:20 Port M3: water, foam, rain ripples, probe and the floating camera in TSL; `sea` 33.4 dB vs GL; tag `port-m3`. `6c9234c`
 - 2026-10-29 16:47 Port M3a: ocean fields as mipmapped half-float textures; the ocean runs per frame. `a0a4f6d`
 - 2026-10-29 16:47 Port M2: atmosphere LUTs, clear sky, env, irradiance, post chain in TSL; clear sky 41.6 dB vs GL; tag `port-m2`. `7cce7af` `65fa720` `c8ae6d4`
 - 2026-10-29 16:32 Port M1: FFT ocean as TSL compute, matches GL within f16 rounding (`tools/fft-diff.mjs`); tag `port-m1`. `fdc3dc5`
