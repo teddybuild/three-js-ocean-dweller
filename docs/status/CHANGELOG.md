@@ -3,6 +3,7 @@
 Every shipped change, newest first: one line each, with its commits. Add a line when a change lands;
 the why and the numbers go in the commit message and the day's `docs/log/` file.
 
+- 2026-10-29 18:40 Port parity: 4x MSAA + centroid, thunder audio, live-path test; all 10 diff scenes 37.3-49.8 dB. `da722f8`
 - 2026-10-29 17:56 Port M5: rain, spray, lightning in TSL (`rain` 43.1 dB, `storm` 41.2 dB); tag `port-m5`. `a86b523`
 - 2026-10-29 17:52 Port M5a: rain, mist, squall curtains, spray haze (`applyFog`); `squall` 32.0 -> 42.0 dB. `5d10346`
 - 2026-10-29 17:34 Port M4: cloud lighting matches GL (shafts ported, phantom flash from `Vector4()` w = 1 fixed), `tools/cloud-diff.mjs`; `breeze` 33.9 dB; tag `port-m4`. `cdb4a82`
