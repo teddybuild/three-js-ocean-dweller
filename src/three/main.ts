@@ -15,7 +15,6 @@ let elapsed = Number(params.get('t') || 0);
 export const uTime = uniform(elapsed);
 
 function fail(msg: string): never {
-  document.body.insertAdjacentHTML('beforeend', `<pre class="err">${msg}</pre>`);
   throw new Error(msg);
 }
 
@@ -26,6 +25,10 @@ async function start() {
   const backend = renderer.backend as any;
   if (!backend.isWebGPUBackend) fail('three fell back to WebGL2; this port needs WebGPU');
   const device: GPUDevice = backend.device;
+  // fixed steps own three's frame lifecycle in ?render: its own rAF loop would advance NodeFrame on the wall clock,
+  // and without it passes like bloom update once per capture instead of once per frame (Codex M0 re-review, P1)
+  const internals = renderer as any;
+  if (RENDER_MODE) internals._animation.stop();
 
   // WebGPU errors: uncaptured ones, a validation scope per frame, and the ones three catches in its own error
   // scopes and only logs (pipeline creation), via its console hook
@@ -38,6 +41,7 @@ async function start() {
     console[type](message, ...rest);
   });
   const ai = device.adapterInfo as GPUAdapterInfo & { isFallbackAdapter?: boolean };
+  const scopes: GPUErrorFilter[] = ['validation', 'out-of-memory', 'internal'];
 
   renderer.setPixelRatio(RENDER_MODE ? 1 : Math.min(window.devicePixelRatio || 1, 1.5));
   renderer.setSize(window.innerWidth, window.innerHeight, false);
@@ -71,10 +75,14 @@ async function start() {
   const frame = (dt: number) => {
     elapsed += dt;
     uTime.value = elapsed;
-    device.pushErrorScope('validation');
+    if (RENDER_MODE) { internals.info.reset(); internals._nodes.nodeFrame.update(); }
+    for (const s of scopes) device.pushErrorScope(s);
     pipeline.render();
-    const popped = device.popErrorScope().then((e) => { if (e) errors.push(e.message); });
-    if (RENDER_MODE) pending.push(popped);  // (the live loop never settles, so it keeps no list)
+    engine.frames++;
+    for (let i = 0; i < scopes.length; i++) {
+      const popped = device.popErrorScope().then((e) => { if (e) errors.push(e.message); });
+      if (RENDER_MODE) pending.push(popped);  // (the live loop never settles, so it keeps no list)
+    }
   };
   const settle = async () => {
     await device.queue.onSubmittedWorkDone();
@@ -83,10 +91,12 @@ async function start() {
   const engine: Engine = {
     name: 'three',
     async step(n, dt) { for (let i = 0; i < n; i++) frame(dt); await settle(); },
-    // render and read in the same task: the WebGPU canvas texture is only valid until the task ends
-    async capture() { frame(0); const png = canvas.toDataURL('image/png'); await settle(); return png; },
+    // one more frame, read in the same task: the WebGPU canvas texture is only valid until the task ends
+    async capture(dt) { frame(dt); const png = canvas.toDataURL('image/png'); await settle(); return png; },
+    frames: 0,
+    get nodeFrame() { return internals._nodes.nodeFrame.frameId as number; },
     errors,
-    adapter: { vendor: ai.vendor, architecture: ai.architecture, description: ai.description, fallback: ai.isFallbackAdapter ?? false },
+    adapter: { vendor: ai.vendor, architecture: ai.architecture, description: ai.description, fallback: typeof ai.isFallbackAdapter === 'boolean' ? ai.isFallbackAdapter : null },
   };
   window.engine = engine;
   if (!RENDER_MODE) {
@@ -95,4 +105,7 @@ async function start() {
   }
 }
 
-start();
+start().catch((e: Error) => {
+  document.body.insertAdjacentHTML('beforeend', `<pre class="err">${e.message}</pre>`);
+  console.error(e);
+});

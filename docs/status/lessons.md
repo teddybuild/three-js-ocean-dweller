@@ -6,6 +6,7 @@ grouped by topic, merged, never appended blindly. A lesson that can be a check b
 ## Harness
 
 - Headless Chrome on Linux needs exactly `--use-angle=vulkan --enable-features=Vulkan --enable-unsafe-webgpu` for a hardware WebGPU adapter; adding `VulkanFromANGLE,DefaultANGLEVulkan` gives none. `navigator.gpu` is missing on `about:blank`.
+- Chrome headless on Linux drops the first WebGL context once (~250 ms, Vulkan compositor surface fails): `launch()` burns it on a warm-up page. A blank reference capture passed the old diff with exit 0.
 - three's NodeFrame only advances in its own rAF loop: fixed steps must stop `renderer._animation` and call `_nodes.nodeFrame.update()` per frame, or passes update once per capture.
 - three catches pipeline validation errors in its own error scopes and only logs them: read them via `THREE.setConsoleFunction`.
 

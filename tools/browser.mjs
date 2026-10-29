@@ -32,14 +32,33 @@ export async function launch({ width = 1920, height = 1080 } = {}) {
     ],
     defaultViewport: { width, height, deviceScaleFactor: 1 },
   });
+  // Linux headless: the Vulkan compositor fails its surface once and Chrome drops the first WebGL context
+  // (~250 ms in). A throwaway page takes that loss so the first app page keeps its context (2026-10-29).
+  const warm = await browser.newPage();
+  await warm.evaluate(() => new Promise((done) => {
+    const c = document.body.appendChild(document.createElement('canvas'));
+    const gl = c.getContext('webgl2');
+    c.addEventListener('webglcontextlost', done);
+    setTimeout(done, 3000);
+    const draw = () => { gl.clear(gl.COLOR_BUFFER_BIT); requestAnimationFrame(draw); };
+    draw();
+  }));
+  await warm.close();
   return browser;
 }
 
-export async function openApp(browser, url, { width, height }) {
+// page.collectedErrors holds every console error and page exception from before navigation on.
+// beforeLoad: optional function run in the page before its own scripts (tools/diff.mjs self-test).
+export async function openApp(browser, url, { width, height, beforeLoad }) {
   const page = await browser.newPage();
   await page.setViewport({ width, height, deviceScaleFactor: 1 });
-  page.on('console', (m) => { if (m.type() === 'error' || m.type() === 'warning') console.log('[page]', m.text()); });
-  page.on('pageerror', (e) => console.log('[pageerror]', e.message));
+  page.collectedErrors = [];
+  page.on('console', (m) => {
+    if (m.type() === 'error') page.collectedErrors.push(m.text());
+    if (m.type() === 'error' || m.type() === 'warning') console.log('[page]', m.text());
+  });
+  page.on('pageerror', (e) => { page.collectedErrors.push(e.message); console.log('[pageerror]', e.message); });
+  if (beforeLoad) await page.evaluateOnNewDocument(beforeLoad);
   await page.goto(url, { waitUntil: 'load', timeout: 120000 });
   await page.waitForFunction(() => window.app || window.engine || document.querySelector('.err'), { timeout: 60000 });
   const err = await page.evaluate(() => document.querySelector('.err')?.textContent);

@@ -1,6 +1,6 @@
 // Renders scenes in both engines and compares them: node tools/diff.mjs [scene ...] [--self-test]
-// Each capture is a fresh page (?render, 90 fixed 1/30 s steps of the engine's own clock), so both engines run the
-// same frame sequence from the same seeds. Writes tmp/diff/<scene>.png (gl | three); prints PSNR, pixelmatch %,
+// Each capture is a fresh page (?render): 89 fixed 1/30 s frames of the engine's own clock, then capture(dt) runs
+// frame 90 and reads it, so both engines render the same frame sequence from the same seeds. Writes tmp/diff/<scene>.png (gl | three); prints PSNR, pixelmatch %,
 // adapters and every failure. Exit 1 on any failure (see verdict()). Low PSNR alone is not a failure: it is the
 // port's progress, read off the sheet.
 import { writeFile, mkdir } from 'node:fs/promises';
@@ -14,7 +14,7 @@ const SCENES = {
   calm: 'preset=calm&yaw=60&float=0',
   squall: 'preset=breeze&float=0&front=1&frontDist=15000&frontAz=60&yaw=60&pitch=3&frontLen=8000&frontDepth=4000&frontWidth=1000&sTop=3500&sBase=900',
 };
-const W = 1280, H = 720, WARM = 3, DT = 1 / 30;
+const W = 1280, H = 720, WARM = 3, DT = 1 / 30, FRAMES = Math.round(WARM / DT);
 const EXPECT = { vendor: /nvidia/i, architecture: process.env.EXPECT_GPU_ARCH || 'blackwell' };
 
 export function psnr(a, b) {
@@ -34,18 +34,29 @@ export function verdict(gl, three) {
   const f = [];
   for (const [name, c] of [['gl', gl], ['three', three]]) {
     if (c.img.width !== W || c.img.height !== H) f.push(`${name} capture is ${c.img.width}x${c.img.height}, expected ${W}x${H}`);
+    else if (singleColour(c.img)) f.push(`${name} capture is a single colour`);
+    if (c.frames !== FRAMES) f.push(`${name} rendered ${c.frames} frames, expected ${FRAMES}`);
     for (const e of c.errors) f.push(`${name} error: ${e}`);
   }
+  if (three.nodeFrame !== undefined && three.nodeFrame < FRAMES) f.push(`three NodeFrame advanced ${three.nodeFrame} times in ${FRAMES} frames`);
+  if (!EXPECT.vendor.test(gl.adapter.vendor)) f.push(`gl adapter ${gl.adapter.vendor}, expected NVIDIA`);
   const a = three.adapter;
   if (!EXPECT.vendor.test(a.vendor) || a.architecture !== EXPECT.architecture) f.push(`three adapter ${a.vendor} ${a.architecture}, expected nvidia ${EXPECT.architecture}`);
-  if (a.fallback) f.push('three runs on a fallback adapter');
+  if (a.fallback !== false) f.push(`three fallback adapter: ${a.fallback}`);
   return f;
+}
+
+function singleColour(img) {
+  const d = img.data;
+  for (let i = 4; i < d.length; i += 4) if (d[i] !== d[0] || d[i + 1] !== d[1] || d[i + 2] !== d[2]) return false;
+  return true;
 }
 
 // Known-bad checks: verdict() must reject each broken case, and the metrics must see a corrupted image.
 function selfTest(img) {
-  const ok = { img, errors: [], adapter: { vendor: 'nvidia', architecture: EXPECT.architecture, fallback: false } };
+  const ok = { img, errors: [], frames: FRAMES, nodeFrame: FRAMES, adapter: { vendor: 'nvidia', architecture: EXPECT.architecture, fallback: false } };
   const small = new PNG({ width: 64, height: 64 });
+  const flat = new PNG({ width: img.width, height: img.height });
   const noisy = new PNG({ width: img.width, height: img.height });
   img.data.copy(noisy.data);
   for (let i = 0; i < noisy.data.length; i += 4) noisy.data[i] = (noisy.data[i] + 40) % 256;
@@ -57,6 +68,11 @@ function selfTest(img) {
     ['other vendor fails', verdict(ok, { ...ok, adapter: { ...ok.adapter, vendor: 'intel' } }).length > 0],
     ['other architecture fails', verdict(ok, { ...ok, adapter: { ...ok.adapter, architecture: 'ampere' } }).length > 0],
     ['fallback adapter fails', verdict(ok, { ...ok, adapter: { ...ok.adapter, fallback: true } }).length > 0],
+    ['unknown fallback flag fails', verdict(ok, { ...ok, adapter: { ...ok.adapter, fallback: null } }).length > 0],
+    ['gl on another GPU fails', verdict({ ...ok, adapter: { ...ok.adapter, vendor: 'SwiftShader' } }, ok).length > 0],
+    ['single-colour capture fails', verdict(ok, { ...ok, img: flat }).length > 0],
+    ['wrong frame count fails', verdict({ ...ok, frames: FRAMES + 1 }, ok).length > 0],
+    ['stalled NodeFrame fails', verdict(ok, { ...ok, nodeFrame: 1 }).length > 0],
     ['identical image: PSNR Infinity, 0 % mismatch', (() => { const r = compare(img, img); return r.psnr === Infinity && r.mismatch === 0; })()],
     ['noisy image: PSNR < 40, mismatch > 50 %', (() => { const r = compare(img, noisy); return r.psnr < 40 && r.mismatch > 50; })()],
   ];
@@ -64,20 +80,19 @@ function selfTest(img) {
   return cases.every(([, pass]) => pass);
 }
 
-async function capture(browser, engine, query, inject) {
-  const page = await openApp(browser, `http://localhost:5173/?render&engine=${engine}&${query}`, { width: W, height: H });
-  const pageErrors = [];
-  page.on('console', (m) => { if (m.type() === 'error') pageErrors.push(m.text()); });
-  page.on('pageerror', (e) => pageErrors.push(e.message));
+// inject: run in the page after load (beforeLoad: before its scripts); both only for the self-test
+async function capture(browser, engine, query, { inject, beforeLoad } = {}) {
+  const page = await openApp(browser, `http://localhost:5173/?render&engine=${engine}&${query}`, { width: W, height: H, beforeLoad });
   await page.waitForFunction(() => window.engine, { timeout: 60000 });
   if (inject) await page.evaluate(inject);
   const out = await page.evaluate(async (n, dt) => {
-    await window.engine.step(n, dt);
-    const png = await window.engine.capture();
-    return { png, errors: window.engine.errors, adapter: window.engine.adapter };
-  }, Math.round(WARM / DT), DT);
+    await window.engine.step(n - 1, dt);
+    const png = await window.engine.capture(dt);
+    const e = window.engine;
+    return { png, frames: e.frames, nodeFrame: e.nodeFrame, errors: e.errors, adapter: e.adapter };
+  }, FRAMES, DT);
   await page.close();
-  return { ...out, errors: [...out.errors, ...pageErrors], img: PNG.sync.read(Buffer.from(out.png.split(',')[1], 'base64')) };
+  return { ...out, errors: [...out.errors, ...page.collectedErrors], img: PNG.sync.read(Buffer.from(out.png.split(',')[1], 'base64')) };
 }
 
 function sideBySide(a, b) {
@@ -94,16 +109,23 @@ const browser = await launch({ width: W, height: H });
 let ok = true;
 try {
   for (const name of names.length ? names : ['breeze']) {
-    const q = SCENES[name] ?? name;
+    const q = SCENES[name] ?? (name.includes('float=') ? name : `${name}&float=0`);
     const gl = await capture(browser, 'gl', q);
     const three = await capture(browser, 'three', q);
     if (args.includes('--self-test')) {
       if (!selfTest(gl.img)) ok = false;
-      // live known-bad: an error logged on a real three page must reach verdict()
-      const bad = await capture(browser, 'three', q, () => console.error('THREE.selfTest injected error'));
-      const caught = verdict(gl, bad).some((f) => f.includes('injected'));
-      console.log(`self-test ${caught ? 'ok  ' : 'FAIL'} injected page error fails the run`);
-      if (!caught) ok = false;
+      // live known-bad: errors injected into real pages must reach verdict()
+      const live = [
+        ['three error after load', 'three', { inject: () => console.error('THREE.selfTest injected') }, 'injected'],
+        ['three error during startup', 'three', { beforeLoad: () => console.error('selfTest startup injected') }, 'startup injected'],
+        ['gl invalid call', 'gl', { inject: () => window.app.gl.bindBuffer(0x1234, null) }, 'WebGL error 0x500'],
+      ];
+      for (const [label, eng, opts, needle] of live) {
+        const bad = await capture(browser, eng, q, opts);
+        const caught = (eng === 'gl' ? verdict(bad, three) : verdict(gl, bad)).some((f) => f.includes(needle));
+        console.log(`self-test ${caught ? 'ok  ' : 'FAIL'} ${label} fails the run`);
+        if (!caught) ok = false;
+      }
     }
     const r = compare(gl.img, three.img);
     const failures = verdict(gl, three);
