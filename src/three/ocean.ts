@@ -10,7 +10,7 @@ import { rng } from '../math.js';
 type Node = any; // @types/three's TSL overloads reject long node chains, so nodes and TSL functions are untyped
 const {
   Fn, instancedArray, instanceIndex, uniform, float, int, vec2, vec4, select, sqrt, pow, exp, tanh, cosh, atan, log,
-  abs, cos, sin, clamp, mix, smoothstep, max, min, floor, length,
+  abs, cos, sin, clamp, mix, smoothstep, max, min, floor, length, textureStore, uvec2,
 } = TSL as any;
 
 const PI = Math.PI, G = 9.81, SIGMA_RHO = 7.4e-5;
@@ -91,6 +91,17 @@ function spectrum(k: Node, kmin: number, kmax: number, u: SpectrumUniforms) {
 }
 
 const vec4Buffer = (n: number) => instancedArray(n * n, 'vec4');
+// what the water samples: half float, repeat, mips (three builds them when the texture is next sampled after a store),
+// as GL's rgba16f textures. Active breaking is rgba16f too: r16float storage needs texture-formats-tier1.
+function fieldTexture(n: number) {
+  const t = new THREE.StorageTexture(n, n);
+  t.type = THREE.HalfFloatType;
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  t.generateMipmaps = true;
+  t.minFilter = THREE.LinearMipmapLinearFilter;
+  t.anisotropy = 16;
+  return t;
+}
 const texelXY = (n: number) => ({ x: int(instanceIndex.mod(n)), y: int(instanceIndex.div(n)) });
 
 // One radix-2 Stockham pass of the inverse transform along x (dir 0) or y (dir 1): src -> dst, two vec4 signals
@@ -167,6 +178,7 @@ export class OceanCompute {
       c.disp = [vec4Buffer(n), vec4Buffer(n)];
       c.slope = [vec4Buffer(n), vec4Buffer(n)];
       c.active = [instancedArray(n * n, 'float'), instancedArray(n * n, 'float')];
+      c.tex = { disp: fieldTexture(n), slope: fieldTexture(n), active: fieldTexture(n) };
       c.cur = 0;
       c.uThreshold = uniform(0);
       c.uGain = uniform(0);
@@ -252,9 +264,14 @@ export class OceanCompute {
       const foam = min(prev.mul(exp(u.decay.negate().mul(u.dt))).add(gen), 3.0);
       // active breaking: the same generation, but it lives only while the crest is spilling (~0.4 s)
       const act = c.active[cur].element(instanceIndex).mul(exp(u.dt.mul(-2.5))).add(gen.mul(2.5));
-      c.active[next].element(instanceIndex).assign(min(act, 2.0));
-      c.disp[next].element(instanceIndex).assign(vec4(a.x.mul(L), a.z, a.y.mul(L), foam));
-      c.slope[next].element(instanceIndex).assign(vec4(s, s.mul(s)));
+      const disp = vec4(a.x.mul(L), a.z, a.y.mul(L), foam).toVar(), slope = vec4(s, s.mul(s)).toVar(), active = min(act, 2.0).toVar();
+      c.active[next].element(instanceIndex).assign(active);
+      c.disp[next].element(instanceIndex).assign(disp);
+      c.slope[next].element(instanceIndex).assign(slope);
+      const at = uvec2(x, y);
+      textureStore(c.tex.disp, at, disp);
+      textureStore(c.tex.slope, at, slope);
+      textureStore(c.tex.active, at, vec4(active, 0, 0, 1));
     })().compute(n * n);
   }
 
@@ -287,6 +304,17 @@ export class OceanCompute {
       c.cur = 1 - c.cur;
     });
     this.renderer.compute(nodes);
+  }
+
+  // what the water samples, as Ocean.textures() in src/ocean/ocean.js
+  textures() {
+    return {
+      disp: this.cascades.map((c) => c.tex.disp as THREE.Texture),
+      slope: this.cascades.map((c) => c.tex.slope as THREE.Texture),
+      active: this.cascades.map((c) => c.tex.active as THREE.Texture),
+      sizes: this.cascades.map((c) => c.L as number),
+      texels: this.cascades.map((c) => c.texel as number),
+    };
   }
 
   // current fields of cascade ci, as storage nodes

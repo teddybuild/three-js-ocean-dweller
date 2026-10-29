@@ -66,13 +66,23 @@ async function start() {
   if (params.has('az')) weather.set('sunAz', Number(params.get('az')));
   for (const k of Object.keys(weather.target)) if (params.has(k)) weather.set(k, Number(params.get(k)));
   weather.snap();
+  // FFT sizes follow src/main.js: ?q, else 'high' in ?render and 'rt' live
+  const q = params.get('q') || (RENDER_MODE ? 'high' : 'rt');
+  const ocean = new OceanCompute(renderer, q === 'rt' ? [256, 256, 128, 128] : [512, 256, 256, 256]);
   const atmo = new AtmosphereCompute(renderer);
   const sky = new SkyCompute(renderer, atmo);
   const mixv = (a: number[], b: number[], t: number) => a.map((x, i) => x + (b[i] - x) * t);
-  // per frame, as the top of src/main.js frame(): light source, LUTs, environment (no squall front yet: local = state)
-  const updateSky = (dt: number): PostOptions => {
+  // per frame, as the top of src/main.js frame(): ocean, light source, LUTs, environment (no squall front yet: the
+  // local weather is the state)
+  const updateWorld = (dt: number): PostOptions => {
     weather.update(dt);
     const S = weather.state;
+    ocean.lambda = Math.max(S.choppy, weather.choppyFor(S.wind));
+    // wind drift of surface foam ~3% of U10 (plus a little Stokes drift)
+    const wdr = (S.windDir * Math.PI) / 180;
+    ocean.drift = [Math.cos(wdr) * 0.035 * S.wind, Math.sin(wdr) * 0.035 * S.wind];
+    ocean.setSpectrum(weather.spectrum());
+    ocean.update(elapsed, dt, weather.foam());
     const night = weather.time.sunElev < -7;
     const sun = night ? weather.moonDir() : weather.sunDir();
     atmoU.lightMag.value = night ? -12.7 : -26.74;
@@ -131,7 +141,7 @@ async function start() {
     uTime.value = elapsed;
     if (RENDER_MODE) { internals.info.reset(); internals._nodes.nodeFrame.update(); }
     for (const s of scopes) device.pushErrorScope(s);
-    const postOpts = updateSky(dt);
+    const postOpts = updateWorld(dt);
     renderer.setRenderTarget(hdr);
     renderer.render(scene, camera);
     renderer.setRenderTarget(null);
@@ -158,10 +168,6 @@ async function start() {
   };
   window.engine = engine;
 
-  // the FFT ocean (milestone 1), not drawn yet; tools/fft-diff.mjs drives it through window.portTest. FFT sizes
-  // follow src/main.js: ?q, else 'high' in ?render and 'rt' live.
-  const q = params.get('q') || (RENDER_MODE ? 'high' : 'rt');
-  const ocean = new OceanCompute(renderer, q === 'rt' ? [256, 256, 128, 128] : [512, 256, 256, 256]);
   window.portTest = {
     ocean,
     atmo,

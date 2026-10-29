@@ -10,7 +10,7 @@ import { B64, toF32, relRms, reporter, pageErrors } from './compare.mjs';
 const W = 1280, H = 720, STEPS = 3, DT = 1 / 30, T0 = 37.3;
 const SIZES = [128, 256, 512];
 // relative RMS error limits, about 5-20x the 2026-10-29 run: f32 against f32, and f32 against GL's f16 render targets
-const LIMIT = { fft: 1e-5, h0: 1e-5, disp: 2e-3, slope: 2e-3, foam: 5e-3, active: 5e-3 };
+const LIMIT = { fft: 1e-5, h0: 1e-5, disp: 2e-3, slope: 2e-3, foam: 5e-3, active: 5e-3, tex: 1e-3 };
 const selfTest = process.argv.includes('--self-test');
 
 // 2D inverse DFT, out[x] = sum_k in[k] e^{+2 pi i k x / n} (sign < 0: forward), of the 4 complex signals packed in a
@@ -122,6 +122,9 @@ try {
       for (let ci = 0; ci < o.cascades.length; ci++) {
         const f = o.fields(ci), r = {};
         for (const k of ['h0', 'disp', 'slope', 'active']) r[k] = enc(await o.read(f[k]));
+        // the half-float textures the water samples
+        const tx = o.textures();
+        for (const k of ['disp', 'slope', 'active']) r[k + 'Tex'] = enc(await T.readTexture(tx[k][ci]));
         out.push(r);
       }
       return { res: o.cascades.map((c) => c.N), fields: out };
@@ -138,6 +141,9 @@ try {
     report(`cascade ${ci} foam`, relRms(t.disp, g.disp, 4, [3]), LIMIT.foam);
     report(`cascade ${ci} slope`, relRms(t.slope, g.slope), LIMIT.slope);
     report(`cascade ${ci} active`, relRms(t.active, g.active, 4, [0], 1, [0]), LIMIT.active);
+    report(`cascade ${ci} disp texture vs buffer`, relRms(t.dispTex, t.disp), LIMIT.tex);
+    report(`cascade ${ci} slope texture vs buffer`, relRms(t.slopeTex, t.slope), LIMIT.tex);
+    report(`cascade ${ci} active texture vs buffer`, relRms(t.activeTex, t.active, 1, [0], 4, [0]), LIMIT.tex);
   });
   if (selfTest) report('self-test cascade 1 disp against cascade 2', relRms(T[1].disp, G[2].disp, 4, [0, 1, 2]), LIMIT.disp, true);
 
