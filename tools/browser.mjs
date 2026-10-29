@@ -1,4 +1,4 @@
-// Shared headless-browser launcher (GPU-accelerated Chrome via ANGLE/D3D11).
+// Shared headless-browser launcher (GPU-accelerated Chrome: ANGLE/D3D11 on Windows, Vulkan + WebGPU on Linux).
 import puppeteer from 'puppeteer-core';
 import { existsSync } from 'node:fs';
 
@@ -7,6 +7,7 @@ const CANDIDATES = [
   'C:/Program Files/Google/Chrome/Application/chrome.exe',
   'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe',
   '/usr/bin/google-chrome',
+  '/usr/bin/google-chrome-stable',
   '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
 ].filter(Boolean);
 
@@ -18,7 +19,8 @@ export async function launch({ width = 1920, height = 1080 } = {}) {
     headless: 'new',
     protocolTimeout: 0,
     args: [
-      '--use-angle=d3d11',
+      // (Linux: these three flags give a hardware WebGPU adapter in headless Chrome 156 on the RTX 5080, 2026-10-29)
+      ...(process.platform === 'linux' ? ['--use-angle=vulkan', '--enable-features=Vulkan', '--enable-unsafe-webgpu'] : ['--use-angle=d3d11']),
       '--enable-gpu',
       '--ignore-gpu-blocklist',
       '--enable-webgl',
@@ -39,7 +41,7 @@ export async function openApp(browser, url, { width, height }) {
   page.on('console', (m) => { if (m.type() === 'error' || m.type() === 'warning') console.log('[page]', m.text()); });
   page.on('pageerror', (e) => console.log('[pageerror]', e.message));
   await page.goto(url, { waitUntil: 'load', timeout: 120000 });
-  await page.waitForFunction(() => window.app || document.querySelector('.err'), { timeout: 60000 });
+  await page.waitForFunction(() => window.app || window.engine || document.querySelector('.err'), { timeout: 60000 });
   const err = await page.evaluate(() => document.querySelector('.err')?.textContent);
   if (err) throw new Error(err);
   return page;

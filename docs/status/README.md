@@ -11,7 +11,8 @@ Where the project is right now. Read this first, then the newest handoff.
 
 ## Right now (2026-10-29)
 
-Fork of open-water `3d1adaa` with Vite + TS; `pnpm check` passes and the build renders in Chrome. Next: the three.js boat route (`open/`).
+three.js WebGPU port, milestone 0 done: `?engine=three` skeleton, `tools/diff.mjs`, hardware WebGPU in headless
+Chrome. Next: milestone 1, open-water's FFT as TSL compute (`docs/systems/three-port.md`).
 
 ## How to update
 

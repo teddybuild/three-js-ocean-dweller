@@ -5,4 +5,5 @@ over this page. New item: a file here plus a line below. Finished: delete its fi
 
 ## Open
 
-1. [three-js-boat.md](three-js-boat.md) - bring in three.js for the boat.
+1. three.js WebGPU port - milestone 1 (FFT alone) next; `docs/systems/three-port.md`.
+2. [three-js-boat.md](three-js-boat.md) - parked (ruling 2026-10-29).

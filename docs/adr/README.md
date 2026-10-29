@@ -13,3 +13,4 @@ Use ADRs for expensive or hard-to-reverse technical and design choices. Tuning n
 
 | ADR | Date | Decision | Status |
 |-----|------|----------|--------|
+| [0001](0001-three-webgpu-port.md) | 2026-10-29 | Port to three.js WebGPU, side by side | Accepted |

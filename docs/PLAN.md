@@ -12,5 +12,4 @@ A web successor to an earlier Godot ocean project: cinematic open ocean, later a
 - Stack: Vite + TypeScript, local only (no hosting).
 - Base: fork open-water as-is ("no preference" on the base question; the default was taken). The Godot repo had
   already ported its sky and clouds from it.
-- Renderer: WebGPU was picked before open-water turned out to be WebGL2. Open: three.js WebGLRenderer on the shared
-  WebGL2 context for the boat, or a WebGPU rebuild (see `status/open/`).
+- Renderer: full port to three.js WebGPU, side by side, "same feel, freedom to change" (`adr/0001-three-webgpu-port.md`).

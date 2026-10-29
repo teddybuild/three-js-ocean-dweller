@@ -35,6 +35,7 @@ checks) before creating it.
 | `docs/status/` | `README.md`, `CHANGELOG.md`, `handoffs/` (newest only), `open/`, `lessons.md`, `rulings.md` |
 | `docs/log/` | dated work notes and research, `YYYY-MM-DD-topic.md` |
 | `src/` | upstream open-water modules (plain JS, embedded GLSL); new code is TS |
+| `src/three/` | the three.js WebGPU port (TS), `docs/systems/three-port.md` |
 | `public/audio/` | recorded rain and thunder (`CREDITS.md`), served at `/audio/` |
 | `tools/`, `render/` | upstream puppeteer probes and the offline film renderer; they expect the dev server on :5173 |
 | `media/` | upstream README images and film |
@@ -51,7 +52,8 @@ history and numbers go in the day's `docs/log/` file.
 
 - `pnpm check` - the gate (`tsc --noEmit && vite build`). Must pass before any push.
 - `pnpm dev` - dev server on http://localhost:5173 (port fixed for `tools/`). `pnpm preview` serves `dist/` on :4173.
-- URL flags: see `src/main.js` (`?render`, presets).
+- URL flags: see `src/main.js` (`?render`, presets). `?engine=three` runs the WebGPU port.
+- `node tools/diff.mjs [scene ...] [--self-test]` - renders both engines, writes `tmp/diff/<scene>.png`, prints PSNR.
 
 ## Workflow
 
