@@ -17,6 +17,15 @@ How the port is built and checked. Decision: `docs/adr/0001-three-webgpu-port.md
 - Ocean (`src/three/ocean.ts`, M1): open-water's spectrum, evolve, Stockham FFT and assemble as TSL compute over
   f32 storage buffers indexed `y * N + x`. One ComputeNode per cascade, FFT stage and ping-pong direction, all
   uniforms set before the frame's one `renderer.compute([...])`. Not drawn yet; `window.portTest` drives it.
+- Atmosphere and sky (`src/three/atmosphere.ts`, `src/three/sky.ts`, M2): the 4 LUTs, the environment map and its
+  irradiance are compute kernels writing half-float storage textures texel by texel (row y is v = (y + 0.5) / h, as
+  in GL). The environment gets its mips from three's storage-texture auto-mips, which run when the texture is next
+  sampled, so the irradiance pass is a separate `compute()` call. The background is the clear-sky branch of
+  `SKY_FS` (`scene.backgroundNode`); clouds, fog and shafts come with M4 and M5. `src/sky/atmosphere.js` exports
+  `mediumFor()` for both engines.
+- Post (`src/three/post.ts`, M2): open-water's bloom pyramid, metering, eye adaptation and AgX composite as QuadMesh
+  passes; the scene renders into a half-float target first. The composite runs with `NoToneMapping` and the working
+  colour space so three adds no second tone map or sRGB encode. NaN/Inf tests are bit tests (`src/three/tsl-util.ts`).
 
 ## Checks
 
@@ -31,6 +40,9 @@ How the port is built and checked. Decision: `docs/adr/0001-three-webgpu-port.md
   noise), then every cascade's h0, disp, foam, slope and active buffers against a fresh GL `Ocean` after 3 steps of
   the breeze spectrum. Limits are relative RMS: 1e-5 for f32 against f32, 2e-3 (5e-3 foam) against GL's f16 targets.
   `--self-test` adds a forward-transform reference and a swapped cascade, which must fail.
+- `node tools/lut-diff.mjs [--self-test]`: the 4 LUTs, env, envDeck and irradiance against fresh GL objects at sun
+  11/45/2/-4 deg, relative RMS limit 1e-3. An all-zero reference fails (`tools/compare.mjs`).
+- `diff.mjs` scene `clear` (no clouds, pitch 10) compares the top 68 % of rows and fails below 38 dB PSNR.
 - Headless Chrome 156 on Linux gets a hardware WebGPU adapter (nvidia blackwell) only with `--use-angle=vulkan
   --enable-features=Vulkan --enable-unsafe-webgpu` (`tools/browser.mjs`).
 
@@ -40,12 +52,16 @@ Fill one row per GPU resource as it is ported. The GL column comes from the 2026
 
 | Resource | GL (src/) | three | Owner | Notes |
 |---|---|---|---|---|
-| HDR scene | MSTarget rgba16f/r11g11b10f, MSAA, blit resolve | `pass()` in `RenderPipeline` | `src/three/main.ts` | M0 |
-| Tone map | AgX in `src/fx/post.js` | `AgXToneMapping` | `src/three/main.ts` | M0 placeholder; compare against post.js at M2 |
+| HDR scene | MSTarget rgba16f/r11g11b10f, MSAA, blit resolve | half-float RenderTarget, no MSAA yet | `src/three/main.ts` | M2 |
+| Tone map | AgX in `src/fx/post.js` | same AgX + look in TSL | `src/three/post.ts` | M2 |
 | Noise, h0 | rgba32f per cascade | vec4 f32 buffer per cascade | `src/three/ocean.ts` | M1; rng(1337), same draw order |
 | FFT ping-pong | 2 MRT pairs rgba32f per size | 2 x 2 vec4 buffers per size | `src/three/ocean.ts` | M1; shared by cascades of one size, result in A |
 | disp + foam, slope | rgba16f x2, mips | vec4 f32 buffers x2 per cascade | `src/three/ocean.ts` | M1; textures with mips needed at M3 (water) |
 | active breaking | r16f x2, mips | float f32 buffers x2 per cascade | `src/three/ocean.ts` | M1 |
+| Atmosphere LUTs | rgba16f 256x64, 32x32, 256x128, 64x64 | half-float StorageTextures, same sizes | `src/three/atmosphere.ts` | M2 |
+| env, envDeck | rgba16f 512x256, mips, env wraps in s | half-float StorageTextures, auto-mips | `src/three/sky.ts` | M2; envDeck = env until fog lands |
+| irradiance | rgba16f 2x1 | half-float StorageTexture 2x1 | `src/three/sky.ts` | M2 |
+| bloom, lum, adapt | rgba16f pyramid, 256x256 mips, rgba32f 1x1 x2 | RenderTargets, same formats | `src/three/post.ts` | M2 |
 
 ## Rules for ported shaders
 

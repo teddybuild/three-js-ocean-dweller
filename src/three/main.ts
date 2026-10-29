@@ -1,12 +1,12 @@
 // three.js WebGPU port of open-water. Renderer, clock, camera, weather, atmosphere and the clear sky (M2); the sea
 // is a flat placeholder until the water lands (M3). WebGPU only: three's WebGL2 fallback is refused.
 import * as THREE from 'three/webgpu';
-import { pass, uniform, Fn, positionWorldDirection } from 'three/tsl';
-import { bloom } from 'three/addons/tsl/display/BloomNode.js';
+import { uniform, Fn, max, positionWorldDirection } from 'three/tsl';
 import type { Engine } from '../boot';
 import { OceanCompute } from './ocean';
 import { AtmosphereCompute } from './atmosphere';
 import { SkyCompute, skyU } from './sky';
+import { PostChain, type PostOptions } from './post';
 import { atmoU } from './atmosphere';
 import { Weather } from '../weather.js';
 import { smoothstep } from '../math.js';
@@ -51,7 +51,6 @@ async function start() {
 
   renderer.setPixelRatio(RENDER_MODE ? 1 : Math.min(window.devicePixelRatio || 1, 1.5));
   renderer.setSize(window.innerWidth, window.innerHeight, false);
-  renderer.toneMapping = THREE.AgXToneMapping;
 
   // camera: same URL keys, defaults and clip planes as src/main.js (eye height h, yaw/pitch in degrees, vertical
   // fov). The GL camera rides the waves unless ?float=0; this one is still until the probe is ported.
@@ -71,7 +70,7 @@ async function start() {
   const sky = new SkyCompute(renderer, atmo);
   const mixv = (a: number[], b: number[], t: number) => a.map((x, i) => x + (b[i] - x) * t);
   // per frame, as the top of src/main.js frame(): light source, LUTs, environment (no squall front yet: local = state)
-  const updateSky = (dt: number) => {
+  const updateSky = (dt: number): PostOptions => {
     weather.update(dt);
     const S = weather.state;
     const night = weather.time.sunElev < -7;
@@ -86,6 +85,22 @@ async function start() {
     // water-leaving reflectance: deep blue, greyer with bubbles in a high wind, grey-green in rain
     skyU.envRrs.value.fromArray(mixv(mixv([0.0004, 0.003, 0.0085], [0.0012, 0.0026, 0.0022], 0.8 * smoothstep(5, 24, S.wind)), [0.0013, 0.0024, 0.0025], smoothstep(0.1, 0.8, S.rain)));
     sky.renderEnv();
+    // post options, as src/main.js passes them (no squall front or lightning yet)
+    // shooting into a low sun a photographer meters the bright sky (scene), not the incident light
+    const fwd = camera.getWorldDirection(new THREE.Vector3());
+    const fh = Math.hypot(fwd.x, fwd.z) || 1;
+    const backlit = night ? 0 : smoothstep(0.55, 0.95, (fwd.x * sun[0] + fwd.z * sun[2]) / fh / (Math.hypot(sun[0], sun[2]) || 1)) * (1 - smoothstep(12, 35, weather.time.sunElev)) * (1 - S.clouds * 0.8);
+    // how much of the frame a storm fills
+    const stormView = smoothstep(0.7, 0.9, S.clouds) * smoothstep(0.4, 0.8, S.cloudDark);
+    return {
+      time: elapsed, bloom: 0.012 + 0.006 * backlit + 0.01 * (night ? 1 : 0),
+      exposureBias: Number(params.get('ev') || 0) - 0.7 * backlit - 1.0 * S.cloudDark * S.cloudDark * (0.4 + 0.6 * S.rain) + 0.8 * (1 - smoothstep(0.2, 0.4, S.clouds)) * smoothstep(35, 50, weather.time.sunElev) + 0.1 * smoothstep(0.8, 0.95, S.clouds) * (1 - smoothstep(0.4, 0.6, S.cloudDark)) * (1 - S.rain),
+      incident: 0.65 * (1 - backlit) * (1 - 0.7 * stormView), fade: 1,
+      whiteBalance: params.has('wb') ? Number(params.get('wb')) : (0.1 * smoothstep(0.25, 0.6, S.clouds) + 0.35 * smoothstep(0.8, 0.95, S.clouds)) * (1 - backlit) * (night ? 0 : 1),
+      night: night ? 1 : 0,
+      look: params.has('look') ? params.get('look')!.split(',').map(Number) : night ? [1.35, 0.4, 1.0, 0.004] : mixv([1.5, 0.4, 1.0, 0.004], [1.6, 0.36, 0.95, 0.03], stormView),
+      look2: night ? [1.5, 1.0] : [1.8 - 0.3 * stormView, 1.03 + 0.12 * backlit * (1 - stormView)],
+    };
   };
 
   // the clear sky, and a flat placeholder sea
@@ -95,15 +110,20 @@ async function start() {
   sea.rotation.x = -Math.PI / 2;
   scene.add(sea);
 
-  const pipeline = new THREE.RenderPipeline(renderer);
-  const scenePass = pass(scene, camera);
-  pipeline.outputNode = scenePass.add(bloom(scenePass, 0.15, 0.4, 0.9));
-
-  window.addEventListener('resize', () => {
+  // the HDR scene (half float, as GL's rgba16f target; no MSAA yet), then open-water's post chain to the canvas.
+  // Incident metering: an 18 % grey card under the sun and sky (no cloud shadow yet)
+  const hdr = new THREE.RenderTarget(1, 1, { type: THREE.HalfFloatType });
+  const post = new PostChain(renderer, { incidentE: sky.sunIlluminance().mul(max(atmoU.sun.y, 0)).add(sky.skyIrradiance()) });
+  const resize = () => {
     renderer.setSize(window.innerWidth, window.innerHeight, false);
+    const size = renderer.getDrawingBufferSize(new THREE.Vector2());
+    hdr.setSize(size.x, size.y);
+    post.resize(size.x, size.y);
     camera.aspect = window.innerWidth / window.innerHeight;
     camera.updateProjectionMatrix();
-  });
+  };
+  resize();
+  window.addEventListener('resize', resize);
 
   const nodeFrame0 = internals._nodes.nodeFrame.frameId as number;
   const frame = (dt: number) => {
@@ -111,8 +131,11 @@ async function start() {
     uTime.value = elapsed;
     if (RENDER_MODE) { internals.info.reset(); internals._nodes.nodeFrame.update(); }
     for (const s of scopes) device.pushErrorScope(s);
-    updateSky(dt);
-    pipeline.render();
+    const postOpts = updateSky(dt);
+    renderer.setRenderTarget(hdr);
+    renderer.render(scene, camera);
+    renderer.setRenderTarget(null);
+    post.render(hdr.texture, dt, postOpts);
     engine.frames++;
     for (let i = 0; i < scopes.length; i++) {
       const popped = device.popErrorScope().then((e) => { if (e) errors.push(e.message); });

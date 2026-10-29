@@ -13,7 +13,13 @@ const SCENES = {
   breeze: 'preset=breeze&float=0',
   calm: 'preset=calm&yaw=60&float=0',
   squall: 'preset=breeze&float=0&front=1&frontDist=15000&frontAz=60&yaw=60&pitch=3&frontLen=8000&frontDepth=4000&frontWidth=1000&sTop=3500&sBase=900',
+  // the clear sky alone (milestone 2): no clouds, camera 10 deg up, metrics over the top rows only
+  clear: 'preset=breeze&float=0&clouds=0&pitch=10',
 };
+// fraction of rows from the top that the metrics cover: at pitch 10 and fov 42 the horizon is at 73 %
+const CROP = { clear: 0.68 };
+// PSNR floors of ported scenes: below it the run fails (clear sky 41.6 dB on 2026-10-29)
+const MIN_PSNR = { clear: 38 };
 const W = 1280, H = 720, WARM = 3, DT = 1 / 30, FRAMES = Math.round(WARM / DT);
 // GL names the device; WebGPU redacts it to vendor + architecture, which on this one-GPU box is the 5080
 const EXPECT = { vendor: /nvidia/i, device: process.env.EXPECT_GPU || 'RTX 5080', architecture: process.env.EXPECT_GPU_ARCH || 'blackwell' };
@@ -24,10 +30,11 @@ export function psnr(a, b) {
   return se === 0 ? Infinity : 10 * Math.log10((255 * 255) / (se / n));
 }
 
-function compare(a, b) {
+function compare(a, b, crop = 1) {
   if (a.width !== b.width || a.height !== b.height) return { psnr: NaN, mismatch: NaN };
-  const bad = pixelmatch(a.data, b.data, null, a.width, a.height, { threshold: 0.1 });
-  return { psnr: psnr(a.data, b.data), mismatch: (100 * bad) / (a.width * a.height) };
+  const rows = Math.round(a.height * crop), n = rows * a.width * 4;
+  const bad = pixelmatch(a.data.subarray(0, n), b.data.subarray(0, n), null, a.width, rows, { threshold: 0.1 });
+  return { psnr: psnr(a.data.subarray(0, n), b.data.subarray(0, n)), mismatch: (100 * bad) / (a.width * rows) };
 }
 
 // Every reason a gl/three pair must fail the run. An empty list is a pass.
@@ -129,8 +136,9 @@ try {
         if (!caught) ok = false;
       }
     }
-    const r = compare(gl.img, three.img);
+    const r = compare(gl.img, three.img, CROP[name]);
     const failures = verdict(gl, three);
+    if (MIN_PSNR[name] && !(r.psnr >= MIN_PSNR[name])) failures.push(`PSNR ${r.psnr.toFixed(2)} below the floor ${MIN_PSNR[name]}`);
     if (failures.length) ok = false;
     await writeFile(`tmp/diff/${name}.png`, sideBySide(gl.img, three.img));
     console.log(JSON.stringify({ scene: name, psnr: Number(r.psnr.toFixed(2)), mismatchPct: Number(r.mismatch.toFixed(1)), gl: gl.adapter.vendor, three: three.adapter, failures }));

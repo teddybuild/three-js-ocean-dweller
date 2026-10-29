@@ -55,6 +55,7 @@ history and numbers go in the day's `docs/log/` file.
 - URL flags: see `src/main.js` (`?render`, presets). `?engine=three` runs the WebGPU port.
 - `node tools/diff.mjs [scene ...] [--self-test]` - renders both engines, writes `tmp/diff/<scene>.png`, prints PSNR.
 - `node tools/fft-diff.mjs [--self-test]` - the three.js FFT ocean against a CPU DFT and against the GL ocean.
+- `node tools/lut-diff.mjs [--self-test]` - the three.js atmosphere LUTs, env and irradiance against GL.
 
 ## Workflow
 
