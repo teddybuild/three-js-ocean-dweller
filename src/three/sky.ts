@@ -1,10 +1,11 @@
 // open-water's sky (src/sky/sky.js) and the LUT lookups of SKY_LOOKUP_GLSL (src/sky/atmosphere.js) in TSL: sky
 // radiance, transmittance, aerial perspective, irradiance, stars, the sun and moon disk, the equirectangular
 // reflection environment (with its mip chain) and its irradiance, both with the clouds composited (M4), and the
-// crepuscular rays (withShafts). Fog and rain curtains come with milestone 5.
+// crepuscular rays (withShafts), and the rain, mist, squall curtains and spray haze in front of everything (applyFog).
 import * as THREE from 'three/webgpu';
 import * as TSL from 'three/tsl';
 import { atmoU, AtmosphereCompute } from './atmosphere';
+import { frontCurve } from './clouds';
 
 type Node = any; // @types/three's TSL overloads reject long node chains, so nodes and TSL functions are untyped
 const {
@@ -14,7 +15,37 @@ const {
 } = TSL as any;
 
 const PI = Math.PI;
+const hg = (c: Node, g: number) => float((1 - g * g) / (4 * 3.14159)).div(pow(float(1 + g * g).sub(c.mul(2 * g)), 1.5));
+const fogHash = (x: Node) => fract(sin(x.mul(91.17)).mul(43758.5453));
+function fogNoise(x0: Node) {
+  const x = float(x0).toVar(), i = floor(x).toVar(), f0 = fract(x).toVar();
+  const f = f0.mul(f0).mul(f0).mul(f0.mul(f0.mul(6).sub(15)).add(10));
+  return mix(fogHash(i), fogHash(i.add(1)), f);
+}
+function fogNoise2(p: Node) {
+  const i = floor(p).toVar(), f0 = fract(p).toVar();
+  const f = f0.mul(f0).mul(f0.mul(-2).add(3)).toVar();
+  const n = i.x.add(i.y.mul(57)).toVar();
+  return mix(mix(fogHash(n), fogHash(n.add(1)), f.x), mix(fogHash(n.add(57)), fogHash(n.add(58)), f.x), f.y);
+}
+// antiderivative of the linear ramp clamp((u + w) / 2w, 0, 1), and the path length inside the ramp from s0, rate a,
+// over L
+const rampInt = (u: Node, w: Node) => select(u.lessThan(w.negate()), 0, select(u.greaterThan(w), u, u.add(w).mul(u.add(w)).div(w.mul(4))));
+const rampPath = (s0: Node, a: Node, L: Node, w: Node) => select(abs(a).lessThan(1e-5), clamp(s0.add(w).div(w.mul(2)), 0, 1).mul(L),
+  rampInt(s0.add(a.mul(L)), w).sub(rampInt(s0, w)).div(select(abs(a).lessThan(1e-5), 1, a)));
 const SUN_COS = 0.99998917; // cos(0.2666 deg)
+
+// rain and mist below the cloud deck (GL fogU)
+export const fogU = {
+  density: uniform(0), top: uniform(1300),        // extinction (1/m) up to top (m)
+  front: uniform(new THREE.Vector4(1, 0, 0, 0)),  // squall front: xy normal (towards the storm), z offset (m), w width (0 = off)
+  cell: uniform(new THREE.Vector2()),             // squall cell: x half-length along the line, y depth behind it (m)
+  storm: uniform(new THREE.Vector3(0, 0.3, 0)),   // storm-side extinction (1/m), brightness, optical depth of the veil round the camera
+  cam: uniform(new THREE.Vector2()),              // camera xz
+  rainCell: uniform(new THREE.Vector3()),         // x: the rain part of density (the shower at the camera), yz: cell drift (m)
+  flashFog: uniform(new THREE.Vector3()), flashDir: uniform(new THREE.Vector3(0, 1, 0)), // lightning light in the rain
+  sprayHaze: uniform(new THREE.Vector2()),        // x: extinction at the sea surface (1/m), y: camera height (m)
+};
 
 export const skyU = {
   sunVis: uniform(1), isMoon: uniform(0), pixelAngle: uniform(0.001), time: uniform(0),
@@ -54,6 +85,7 @@ export class SkyCompute {
   cloudsEnv = texture(this.blank);
   clouds = texture(this.blank);
   shaftShadow = texture(this.blank); // the cloud-shadow map (the caller sets .value, with skyU.shaftRect)
+  cloudDepth = texture(this.blank);  // the screen clouds' mean distance (km, CloudsCompute.depth)
   irradiance = (() => { const t = new THREE.StorageTexture(2, 1); t.type = THREE.HalfFloatType; t.minFilter = t.magFilter = THREE.NearestFilter; return t; })();
   private renderer: THREE.WebGPURenderer;
   private atmo: AtmosphereCompute;
@@ -180,7 +212,130 @@ export class SkyCompute {
     const cl = select(lowRes, this.cloudBicubic(uv, cts), this.clouds.sample(uv).level(0)).toVar();
     const sky = this.skyRadiance(d).toVar();
     const skyCol = sky.add(col.sub(sky).mul(cl.a).mul(cl.a));
-    return this.withShafts(select(skyU.cloudsOn.greaterThan(0.5), skyCol.mul(cl.a).add(cl.rgb), col), ro, d, 1e9);
+    // rain and mist lie in front of the clouds only up to the clouds' distance (single scattering: fog(x, s) =
+    // x T(s) + Lf(s), so cloud light and sky light are fogged separately)
+    const far = this.fog(d, 1e9);
+    const out = col.mul(far.T).add(far.Lf).toVar();
+    If(skyU.cloudsOn.greaterThan(0.5), () => {
+      const near = this.fog(d, max(this.cloudDepth.sample(uv).level(0).r.mul(1000), 1));
+      out.assign(skyCol.mul(far.T).add(far.Lf).mul(cl.a).add(cl.rgb.mul(near.T)).add(near.Lf.mul(cl.a.oneMinus())));
+    });
+    return this.withShafts(out, ro, d, 1e9);
+  }
+
+  // Rain / mist below the cloud deck, lit by the diffuse sky and cloud light plus a forward-scattering sun lobe
+  // (droplets, g ~ 0.7). A layer several optical depths thick scatters many times and barely absorbs: its light field
+  // approaches the mean radiance E / pi (rain greys the view, it does not black out the day).
+  private fogRadiance(dir: Node, sunFrac: Node) {
+    const tauV = max(fogU.density.mul(fogU.top), fogU.storm.z);
+    const a = exp(tauV.negate()).oneMinus().mul(0.45).add(0.46);
+    // lightning light scattered by rain and mist is concentrated towards the strike
+    const fl = pow(max(dot(dir, fogU.flashDir), 0), 8).mul(2.2).add(0.2);
+    return this.deckIrradiance().mul(a.div(3.14159)).add(this.sunIlluminance().mul(sunFrac).mul(hg(dot(dir, atmoU.sun), 0.7)).mul(0.92))
+      .add(fogU.flashFog.mul(fl));
+  }
+  // Rain falls in cells a few km across, not as one uniform sheet
+  private rainCell(xz: Node) {
+    const q = xz.sub(fogU.rainCell.yz).toVar();
+    return smoothstep(0.4, 0.78, fogNoise2(q.div(6000)).mul(0.65).add(fogNoise2(q.div(2300).add(7.3)).mul(0.35))).mul(1.6).add(0.08);
+  }
+
+  // GL applyFog as its two parts: col through dist metres along dir becomes col * T + Lf
+  fog(dir: Node, dist: Node) {
+    const f = fogU, sun = atmoU.sun;
+    // the veil only exists below the cloud base
+    const L = min(dist, select(dir.y.greaterThan(0), f.top.div(max(dir.y, 0.015)), 1e9)).toVar();
+    const tau = f.density.mul(L).toVar();
+    If(f.rainCell.x.greaterThan(0), () => {
+      // the rain optical depth along the ray through the cells, scaled so that the camera stands in its own shower:
+      // gaps open between the cells, curtains hang in others
+      const L2 = min(L, 25000).toVar();
+      const c0 = max(this.rainCell(f.cam), 0.35).toVar();
+      const acc = float(0).toVar();
+      Loop(8, ({ i }: Node) => {
+        const fr = float(i).add(0.5).div(8).toVar();
+        acc.addAssign(min(this.rainCell(f.cam.add(dir.xz.mul(L2.mul(fr).mul(fr)))).div(c0), 3).mul(fr).mul(0.25));
+      });
+      tau.addAssign(f.rainCell.x.mul(L2.mul(acc).sub(L)));
+    });
+    const stormFrac = float(0).toVar(), tcurtain = float(0).toVar();
+    If(f.front.w.greaterThan(0), () => {
+      const n = f.front.xy, w = f.front.w, side = vec2(n.y.negate(), n.x);
+      const s0 = dot(f.cam, n).sub(f.front.z).toVar();
+      const a = dot(dir.xz, n).toVar();
+      const big = abs(a).greaterThan(1e-5);
+      const aSafe = select(big, a, 1);
+      // meandering front: shift the line by its curve where this ray crosses it
+      const tc0 = select(big, s0.negate().div(aSafe), 0);
+      s0.subAssign(frontCurve(dot(f.cam.add(dir.xz.mul(max(tc0, 0))), side)));
+      // (minus the path beyond the cell's back edge; 0 = endless)
+      const cell = vec2(select(f.cell.x.greaterThan(0), f.cell.x, 1e7), select(f.cell.y.greaterThan(0), f.cell.y, 1e7)).toVar();
+      const m = rampPath(s0, a, L, w).sub(rampPath(s0.sub(cell.y), a, L, w)).toVar();
+      const sIn = min(s0, cell.y.sub(s0)).toVar();
+      // rain shafts: curtain density varies along the front where the ray crosses it (inside the storm: the shafts
+      // around the camera)
+      const tc = select(big, s0.negate().div(aSafe), 0).toVar();
+      const tcp = max(tc, 0).toVar();
+      const along = dot(f.cam.add(dir.xz.mul(select(tc.greaterThan(0), tc, min(L, 2500)))), side).toVar();
+      // peaked shafts (no plateaus: a plateau reads as a slab with straight sides)
+      const sh0 = fogNoise(along.div(2200)).mul(0.6).add(fogNoise(along.div(1370).add(3.1)).mul(0.4)).toVar();
+      const shafts = sh0.mul(sh0).mul(3).mul(mix(fogNoise(along.div(430).add(7)), 0.5, smoothstep(6000, 15000, tcp)).mul(0.4).add(0.6)).add(0.15).toVar();
+      // under the downpour the veil closes round the viewer, densest low down; the base shows above
+      shafts.assign(max(shafts, smoothstep(w.negate(), w, sIn).mul(fogNoise(along.div(700).add(2)).mul(0.6).add(0.35)).mul(smoothstep(0.2, 0.6, dir.y).mul(-0.35).add(1))));
+      // curtains fade out into the cloud base instead of ending at a ruler-straight line
+      const hc = max(dir.y.mul(tcp), 0).toVar();
+      const st = max(f.storm.x.mul(shafts).sub(f.density), 0).mul(max(m, 0)).mul(smoothstep(f.top.mul(0.8), f.top, hc).oneMinus()).toVar();
+      // no curtains beyond the cell's ends
+      st.mulAssign(smoothstep(cell.x.sub(w), cell.x.add(w), abs(along)).oneMinus());
+      st.assign(min(st, mix(shafts.mul(3).add(0.6), 1e4, smoothstep(w.negate(), w, sIn))));
+      tau.addAssign(st);
+      stormFrac.assign(st.div(max(tau, 1e-6)));
+      // fine vertical streaks of falling rain, slanted by the wind, where the ray meets the curtain; fine only up close
+      // (far curtains read as soft shafts), domain-warped and multi-octave (no evenly spaced stripes)
+      const near = smoothstep(1500, 5000, tcp).oneMinus().toVar();
+      const a2 = along.div(1700).add(fogNoise(along.div(600)).mul(0.6)).toVar();
+      const farK = smoothstep(4000, 10000, tcp).oneMinus().toVar();
+      const streak = fogNoise(a2.mul(1.9).add(hc.div(1400))).mul(0.5)
+        .add(mix(0.5, fogNoise(a2.mul(4.1).add(hc.div(900)).add(3.3)), farK).mul(0.3))
+        .add(mix(0.5, fogNoise(a2.mul(8.7).add(5.1)), farK).mul(0.2)).mul(0.6)
+        .add(near.mul(fogNoise(along.div(260).add(hc.div(500)).add(3)).mul(0.28).add(fogNoise(along.div(85).add(hc.div(180)).add(9)).mul(0.12))))
+        .add(near.oneMinus().mul(0.2)).toVar();
+      // (far curtains: the streaks merge; only the broad shafts remain)
+      stormFrac.mulAssign(mix(streak.mul(0.16).add(0.92), streak.mul(0.5).add(0.72), near));
+      tcurtain.assign(tcp);
+    });
+    // wind-borne spray hugging the sea (scale height ~25 m): integral of exp(-h/H) along the ray
+    If(f.sprayHaze.x.greaterThan(0), () => {
+      const Hs = 25;
+      const Ls = min(dist, select(tcurtain.greaterThan(0), tcurtain, 12000));
+      const d = dir.y, h0 = f.sprayHaze.y;
+      const flat = abs(d).lessThan(1e-4);
+      const I = select(flat, exp(h0.div(-Hs)).mul(Ls),
+        float(Hs).div(select(flat, 1, d)).mul(exp(h0.div(-Hs)).sub(exp(max(h0.add(d.mul(Ls)), 0).div(-Hs)))));
+      tau.addAssign(f.sprayHaze.x.mul(max(I, 0)));
+    });
+    const T = exp(tau.negate()).toVar();
+    // the storm's rain curtains stand in the storm's shadow: no direct sun, darker diffuse light (moonlight is too
+    // faint to light distant curtains from behind)
+    const sf = clamp(stormFrac, 0, 1).toVar();
+    const behind = select(f.front.w.greaterThan(0).and(atmoU.lightMag.lessThan(-20)),
+      smoothstep(0.05, 0.5, dot(normalize(sun.xz.add(1e-5)), f.front.xy).negate()), 0);
+    // (sunlit rain is a neutral grey-white: large drops scatter all wavelengths alike)
+    const luma = vec3(0.2126, 0.7152, 0.0722);
+    const lit = vec3(dot(this.fogRadiance(dir, float(0.6)), luma)).mul(vec3(0.95, 0.98, 1.03)).mul(0.55);
+    const shade = vec3(dot(this.fogRadiance(dir, float(0)), luma)).mul(vec3(0.92, 0.98, 1.06)).mul(f.storm.y).mul(mix(0.8, 1.15, smoothstep(-0.02, 0.35, dir.y)));
+    const curtain = mix(shade, lit, behind).toVar();
+    // the haze between the viewer and the curtain (by moonlight it stands in the storm's shadow)
+    If(sf.greaterThan(0).and(tcurtain.greaterThan(0)), () => {
+      const air = this.aerial(dir, min(tcurtain, L).mul(1e-3));
+      curtain.assign(curtain.mul(air.T).add(air.L.mul(select(atmoU.lightMag.greaterThan(-20), 0.6, 1))));
+    });
+    const Lf = mix(this.fogRadiance(dir, atmoU.hazeSun), curtain, sf).mul(T.oneMinus()).toVar();
+    return { T, Lf };
+  }
+  applyFog(col: Node, dir: Node, dist: Node) {
+    const { T, Lf } = this.fog(dir, dist);
+    return col.mul(T).add(Lf);
   }
 
   // Crepuscular rays (GL shafts): single scattering by the marine haze below the cloud base over the first dist metres,
@@ -263,12 +418,15 @@ export class SkyCompute {
       // A ray reflected below the horizon meets the next wave nearby and sees that wave: the sky mirrored by its Fresnel
       // reflectance and its water. This half only feeds the mip chain, whose wide blur on a rough sea must not average
       // in the haze glare that hugs the horizon.
+      const deck = vec3(col).toVar();
+      col.assign(this.applyFog(col, d, 1e9));
       const Fs = pow(min(dy0.negate().add(0.12), 1).oneMinus(), 5).mul(0.98).add(0.02).toVar();
       const Ed = this.sunIlluminance().mul(skyU.sunVis).mul(max(atmoU.sun.y, 0)).add(this.skyIrradiance());
       const sea = Fs.mul(col).add(Fs.oneMinus().mul(skyU.envRrs).mul(Ed));
       const out = vec4(select(dy0.lessThan(0), sea, col), 1).toVar();
       textureStore(env, uvec2(x, y), out);
-      textureStore(envDeck, uvec2(x, y), out); // (no rain or mist yet: the deck light equals the environment)
+      // the same without rain and mist: the light entering them
+      textureStore(envDeck, uvec2(x, y), vec4(select(dy0.lessThan(0), sea, deck), 1));
     })().compute(512 * 256);
   }
 

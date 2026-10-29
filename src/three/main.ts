@@ -5,7 +5,7 @@ import { uniform, Fn, max, positionWorldDirection, screenUV, texture, vec2, came
 import type { Engine } from '../boot';
 import { OceanCompute } from './ocean';
 import { AtmosphereCompute } from './atmosphere';
-import { SkyCompute, skyU } from './sky';
+import { SkyCompute, skyU, fogU } from './sky';
 import { PostChain, type PostOptions } from './post';
 import { WaterMesh } from './water';
 import { FoamTextureCompute } from './foam';
@@ -141,9 +141,24 @@ async function start() {
       rain: S.rain + (S.sRain - S.rain) * mCam,
       clouds: S.clouds + (S.sClouds - S.clouds) * mCam,
       dark: S.cloudDark + (S.sDark - S.cloudDark) * mCam,
+      mist: S.mist + (S.sMist - S.mist) * mCam,
     };
     // fraction of direct sun reaching the haze below the clouds (a closed deck lets none through)
     atmoU.hazeSun.value = (1 - smoothstep(0.3, 0.9, L.clouds)) * (1 - 0.85 * L.dark) * 0.97 + 0.03 * (1 - L.dark) * (1 - smoothstep(0.8, 0.9, L.clouds));
+    // rain and mist (as src/main.js fogU): rain extinction takes visibility from >20 km to ~1.5 km in a downpour
+    const rainBeta = (r: number) => (r > 0.002 ? 0.336e-3 * Math.pow(r * 50, 0.63) : 0);
+    const fogDensity = S.mist * 1.2e-3 + rainBeta(S.rain);
+    const stormFog = S.sMist * 1.2e-3 + rainBeta(S.sRain);
+    const fogTop = fOn ? (S.cloudBase + S.sBase) * 0.5 + 100 : S.cloudBase + 100;
+    fogU.density.value = fogDensity;
+    fogU.top.value = fogTop;
+    fogU.front.value.fromArray(fOn ? [fn[0], fn[1], fz, S.frontWidth] : [1, 0, 0, 0]);
+    fogU.cell.value.fromArray(fCell);
+    fogU.storm.value.set(stormFog, (night ? 0.4 : 0.3) + ((night ? 0.5 : 0.6) - (night ? 0.4 : 0.3)) * mCam, (fogDensity + mCam * Math.max(stormFog - fogDensity, 0)) * fogTop);
+    fogU.cam.value.set(cp.x, cp.z);
+    fogU.rainCell.value.set(fOn ? 0 : rainBeta(S.rain), Math.cos(wdr) * S.wind * 0.8 * elapsed, Math.sin(wdr) * S.wind * 0.8 * elapsed);
+    // spray haze from breaking crests: grows from a near gale (~14 m/s) upwards
+    fogU.sprayHaze.value.set(smoothstep(14, 24, S.wind) * 1.8e-3, Math.max(cp.y, 0.5));
     skyU.isMoon.value = night ? 1 : 0;
     skyU.pixelAngle.value = (camera.fov * Math.PI) / 180 / canvas.height;
     skyU.time.value = elapsed;
@@ -172,6 +187,7 @@ async function start() {
     skyU.cloudSize.value.set(clouds.w, clouds.h);
     // crepuscular rays in the haze below the cloud base (as src/main.js uShaft)
     sky.shaftShadow.value = clouds.shadow;
+    sky.cloudDepth.value = clouds.depth;
     skyU.shaftRect.value.copy(clouds.shadowRect.value);
     skyU.shaft.value.set(atmoU.mie.value.x * 1e-3, Math.min(S.cloudBase, fOn ? S.sBase : 1e9), S.clouds > 0.05 ? 1 : 0, (elapsed * 0.618) % 1);
     // water-leaving reflectance: deep blue, greyer with bubbles in a high wind, grey-green in rain
