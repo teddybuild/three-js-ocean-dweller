@@ -1,7 +1,7 @@
 // open-water's sky (src/sky/sky.js) and the LUT lookups of SKY_LOOKUP_GLSL (src/sky/atmosphere.js) in TSL: sky
 // radiance, transmittance, aerial perspective, irradiance, stars, the sun and moon disk, the equirectangular
-// reflection environment (with its mip chain) and its irradiance, both with the clouds composited (M4). Fog, rain
-// curtains and crepuscular rays come with milestone 5.
+// reflection environment (with its mip chain) and its irradiance, both with the clouds composited (M4), and the
+// crepuscular rays (withShafts). Fog and rain curtains come with milestone 5.
 import * as THREE from 'three/webgpu';
 import * as TSL from 'three/tsl';
 import { atmoU, AtmosphereCompute } from './atmosphere';
@@ -10,7 +10,7 @@ type Node = any; // @types/three's TSL overloads reject long node chains, so nod
 const {
   Fn, Loop, uniform, float, int, vec2, vec3, vec4, uvec2, select, sqrt, pow, exp, log, abs, cos, sin, acos, asin, atan,
   clamp, mix, smoothstep, max, min, normalize, dot, cross, sign, textureStore, texture, instanceIndex, floor, fract,
-  fwidth, ivec2,
+  fwidth, ivec2, If, screenCoordinate, screenSize,
 } = TSL as any;
 
 const PI = Math.PI;
@@ -20,6 +20,8 @@ export const skyU = {
   sunVis: uniform(1), isMoon: uniform(0), pixelAngle: uniform(0.001), time: uniform(0),
   cloudsOn: uniform(0), cloudSize: uniform(new THREE.Vector2(1, 1)),
   envRrs: uniform(new THREE.Vector3(0.0004, 0.003, 0.0085)), // the sea's water-leaving reflectance (1/sr)
+  shaft: uniform(new THREE.Vector4(0, 0, 0, 0)),     // crepuscular rays: haze scattering (1/m), layer top (m), strength, jitter
+  shaftRect: uniform(new THREE.Vector4(0, 0, 0, 0)), // the cloud-shadow map's origin xz and 1/size
 };
 
 const envTexture = (w: number, h: number, repeatS: boolean) => {
@@ -51,6 +53,7 @@ export class SkyCompute {
   private blank = (() => { const t = new THREE.StorageTexture(1, 1); t.type = THREE.HalfFloatType; return t; })();
   cloudsEnv = texture(this.blank);
   clouds = texture(this.blank);
+  shaftShadow = texture(this.blank); // the cloud-shadow map (the caller sets .value, with skyU.shaftRect)
   irradiance = (() => { const t = new THREE.StorageTexture(2, 1); t.type = THREE.HalfFloatType; t.minFilter = t.magFilter = THREE.NearestFilter; return t; })();
   private renderer: THREE.WebGPURenderer;
   private atmo: AtmosphereCompute;
@@ -165,8 +168,9 @@ export class SkyCompute {
     return this.skyRadiance(d).add(this.starField(d)).add(select(c.greaterThan(wEdge.negate().add(SUN_COS)), disk, vec3(0)));
   }
 
-  // the background of SKY_FS with the clouds composited; uv: screen uv with v up (GL's vUv). Fog and shafts: M5.
-  backgroundWithClouds(d0: Node, uv: Node) {
+  // the background of SKY_FS with the clouds composited and the shafts; uv: screen uv with v up (GL's vUv); ro: the
+  // camera. Fog: M5.
+  backgroundWithClouds(d0: Node, uv: Node, ro: Node) {
     const d = normalize(d0).toVar();
     const col = this.background(d).toVar();
     // a low-resolution buffer is upsampled with Catmull-Rom (sharp: a tent or bilinear filter smears the billows into
@@ -176,7 +180,48 @@ export class SkyCompute {
     const cl = select(lowRes, this.cloudBicubic(uv, cts), this.clouds.sample(uv).level(0)).toVar();
     const sky = this.skyRadiance(d).toVar();
     const skyCol = sky.add(col.sub(sky).mul(cl.a).mul(cl.a));
-    return select(skyU.cloudsOn.greaterThan(0.5), skyCol.mul(cl.a).add(cl.rgb), col);
+    return this.withShafts(select(skyU.cloudsOn.greaterThan(0.5), skyCol.mul(cl.a).add(cl.rgb), col), ro, d, 1e9);
+  }
+
+  // Crepuscular rays (GL shafts): single scattering by the marine haze below the cloud base over the first dist metres,
+  // with sun visibility from the cloud-shadow map (a point at height y sees the sun if the sea-level point it maps to
+  // along the sun does). Only the deviation from the mean visibility (hazeSun) counts: the mean is in the LUTs.
+  private shafts(ro: Node, dir: Node, dist: Node) {
+    const u = skyU.shaft, sun = atmoU.sun;
+    const out = vec3(0).toVar();
+    If(u.z.greaterThan(0).and(sun.y.greaterThanEqual(0.02)), () => {
+      const tMax = float(dist).toVar();
+      If(dir.y.greaterThan(0), () => { tMax.assign(min(tMax, u.y.sub(ro.y).div(max(dir.y, 1e-3)))); });
+      tMax.assign(min(tMax, 12000));
+      If(tMax.greaterThan(0), () => {
+        // denser samples near the camera (quadratic), jittered per pixel (GL's gl_FragCoord: y up)
+        const fc = vec2(screenCoordinate.x, screenSize.y.sub(screenCoordinate.y));
+        const jit = fract(u.w.add(fract(sin(dot(fc, vec2(12.9898, 78.233))).mul(43758.5453)))).toVar();
+        const vis = float(0).toVar(), wsum = float(0).toVar();
+        Loop(28, ({ i }: Node) => {
+          const f = float(i).add(jit).div(28).toVar();
+          const p = ro.add(dir.mul(tMax.mul(f).mul(f))).toVar();
+          const suv = p.xz.sub(sun.xz.mul(max(p.y, 0).div(sun.y))).sub(skyU.shaftRect.xy).mul(skyU.shaftRect.zw).toVar();
+          // beyond the shadow map: the mean visibility (no clamped-edge streaks)
+          const inR = smoothstep(0, 0.04, min(min(suv.x, suv.y), min(suv.x.oneMinus(), suv.y.oneMinus())));
+          vis.addAssign(mix(atmoU.hazeSun, this.shaftShadow.sample(suv).level(0).r, inR).mul(f.mul(2)));
+          wsum.addAssign(f.mul(2));
+        });
+        const ph = float((1 - 0.76 * 0.76) / (4 * PI)).div(pow(float(1 + 0.76 * 0.76).sub(dot(dir, sun).mul(2 * 0.76)), 1.5));
+        const scat = exp(u.x.mul(tMax).negate()).oneMinus();
+        out.assign(this.sunIlluminance().mul(ph).mul(scat).mul(vis.div(max(wsum, 1e-4)).sub(atmoU.hazeSun)).mul(u.z));
+      });
+    });
+    return out;
+  }
+
+  // crepuscular rays on a colour: lit gaps add sunlight; shadowed haze darkens what is there (hue-preserving: the
+  // removed in-scatter is the LUT's, whatever its colour), never below 20%
+  withShafts(col: Node, ro: Node, dir: Node, dist: Node) {
+    const luma = vec3(0.2126, 0.7152, 0.0722);
+    const sh = this.shafts(ro, dir, dist).toVar();
+    const ds = dot(sh, luma).toVar();
+    return select(ds.greaterThanEqual(0), col.add(sh), col.mul(max(ds.div(max(dot(col, luma), 1e-7)).add(1), 0.2)));
   }
 
   private cloudBicubic(uv: Node, size: Node) {

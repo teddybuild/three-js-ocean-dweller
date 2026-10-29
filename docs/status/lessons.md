@@ -20,4 +20,5 @@ grouped by topic, merged, never appended blindly. A lesson that can be a check b
 - three generates mips only for 2D textures: write each 3D level with `textureStore(...).setMipLevel(k)` from a separate plain copy of the level above (`src/three/clouds.ts` volume()). Ping-pong textures in materials: keep one texture node and set `.value` per frame; `.sample()`/`.load()` clones follow the base.
 - `?render` selects quality `high`: FFT sizes 512/256/256/256, not 256/256/128/128.
 - Test the FFT butterfly on the CPU against an O(N^2) DFT with a stage-0 sign check; a magnitude-only check missed web-ocean-3d's twiddle bug.
+- `new THREE.Vector4()` is (0, 0, 0, 1): a vec4 uniform whose w is a switch or intensity (flash, bolt) needs explicit zeros. It lit every near cloud with a phantom flash.
 - Reversed-edge `smoothstep` is undefined: use `smoothstep(a, b, x).oneMinus()`. NDC from screen UV is `(2u-1, 1-2v)`. Use TSL `Loop`, not JS `for`.

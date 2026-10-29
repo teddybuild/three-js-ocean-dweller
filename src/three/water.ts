@@ -192,7 +192,7 @@ export class WaterMesh {
     time: uniform(0),
     rain: uniform(0),
     flash: uniform(new THREE.Vector3()), // lightning illuminance
-    bolt: uniform(new THREE.Vector4()),  // ground strike: foot xz, channel top height, channel radiance (0: none)
+    bolt: uniform(new THREE.Vector4(0, 0, 0, 0)),  // ground strike: foot xz, channel top height, channel radiance (0: none)
     windDir: uniform(new THREE.Vector2(1, 0)),
     foamStretch: uniform(0),      // 0: isotropic patches, 1: fully streaky (gale)
     dbgMask: uniform(new THREE.Vector3(1, 1, 1)), // debug: reflection, sun, body multipliers
@@ -523,7 +523,8 @@ export class WaterMesh {
       // aerial perspective
       const air = sky.aerial(V.negate(), dist.mul(0.001));
       col.assign(col.mul(air.T).add(air.L));
-      // light shafts through cloud gaps (withShafts): identity stub until milestone 5
+      // light shafts through cloud gaps in the haze between the camera and this point
+      col.assign(sky.withShafts(col, u.camPos, V.negate(), dist));
       // rain / mist fog (applyFog): identity stub until milestone 5
       return vec4(select(u.debug.equal(1), dbgFoam, col), 1);
     })();

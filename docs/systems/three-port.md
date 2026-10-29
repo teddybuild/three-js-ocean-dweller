@@ -21,7 +21,7 @@ How the port is built and checked. Decision: `docs/adr/0001-three-webgpu-port.md
   irradiance are compute kernels writing half-float storage textures texel by texel (row y is v = (y + 0.5) / h, as
   in GL). The environment gets its mips from three's storage-texture auto-mips, which run when the texture is next
   sampled, so the irradiance pass is a separate `compute()` call. The background is the clear-sky branch of
-  `SKY_FS` (`scene.backgroundNode`); clouds, fog and shafts come with M4 and M5. `src/sky/atmosphere.js` exports
+  `SKY_FS` (`scene.backgroundNode`) with the clouds (M4) and the crepuscular rays (`sky.withShafts`, M4); fog is M5. `src/sky/atmosphere.js` exports
   `mediumFor()` for both engines.
 - Post (`src/three/post.ts`, M2): open-water's bloom pyramid, metering, eye adaptation and AgX composite as QuadMesh
   passes; the scene renders into a half-float target first. The composite runs with `NoToneMapping` and the working
@@ -30,12 +30,15 @@ How the port is built and checked. Decision: `docs/adr/0001-three-webgpu-port.md
   outputs clip space from world positions (no model matrix, never culled). The fragment shader is `water.js` FS plus
   `RAIN_SURFACE_GLSL` and `FOAM_GLSL`; every derivative and implicit-LOD sample is taken before the first `If`. The
   foam texture is a compute kernel. Stubs until M4/M5: sun visibility is `atmoU.hazeSun` (GL's value outside the
-  cloud-shadow rect), no shafts, no fog, no lightning. The camera floats on `OceanProbe` as GL's `updateCamera`;
+  cloud-shadow rect); shafts as GL (`withShafts` after the aerial perspective); no fog, no lightning. The camera floats on `OceanProbe` as GL's `updateCamera`;
   `?render` awaits each probe read, live uses the last finished one.
-- Clouds (`src/three/clouds.ts`, M4, lighting not yet matching GL): noise volumes, weather map, shadow map, env and
+- Clouds (`src/three/clouds.ts`, M4): noise volumes, weather map, shadow map, env and
   screen passes as compute kernels writing GL's texel layout (v up). 3D mips are written level by level (three only
   generates 2D mips). The screen pass builds rays from the camera basis and reprojects with the previous basis.
-  `sky.backgroundWithClouds` composites them; texture nodes `sky.clouds` / `sky.cloudsEnv` are re-pointed per frame.
+  `sky.backgroundWithClouds` composites them, then the shafts darken the haze in the clouds' shadow (sun-ward this
+  is most of the light: without them the backlit clouds read 2.4x GL). Texture nodes `sky.clouds`, `sky.cloudsEnv`
+  and `sky.shaftShadow` are re-pointed per frame. `THREE.Vector4()` defaults w to 1: every vec4 uniform whose w is a
+  switch (`cloudU.flash`, water `bolt`) is created with an explicit 0.
 
 ## Checks
 
@@ -52,8 +55,12 @@ How the port is built and checked. Decision: `docs/adr/0001-three-webgpu-port.md
   `--self-test` adds a forward-transform reference and a swapped cascade, which must fail.
 - `node tools/lut-diff.mjs [--self-test]`: the 4 LUTs, env, envDeck and irradiance against fresh GL objects at sun
   11/45/2/-4 deg, relative RMS limit 1e-3. An all-zero reference fails (`tools/compare.mjs`).
-- `diff.mjs` scene `clear` (no clouds, pitch 10) compares the top 68 % of rows and fails below 38 dB PSNR; scene
-  `sea` (no clouds, pitch 1.5, mostly water) fails below 30 dB.
+- `node tools/cloud-diff.mjs [--self-test]`: 90 breeze frames in both engines, then the shape and detail volumes (3
+  z slices per mip), every weather-map mip, the shadow map, env clouds and the screen buffer with its distance.
+  Relative RMS with rgb and alpha apart, plus the three/GL ratio of the channel means. `--self-test`: a shape slice
+  against another slice must fail.
+- `diff.mjs` scene `clear` (no clouds, pitch 10) compares the top 68 % of rows and fails below 38 dB PSNR; scenes
+  `sea` (no clouds, pitch 1.5, mostly water) and `breeze` (clouds) fail below 30 dB.
 - Headless Chrome 156 on Linux gets a hardware WebGPU adapter (nvidia blackwell) only with `--use-angle=vulkan
   --enable-features=Vulkan --enable-unsafe-webgpu` (`tools/browser.mjs`).
 

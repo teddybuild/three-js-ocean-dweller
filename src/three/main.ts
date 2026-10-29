@@ -1,7 +1,7 @@
 // three.js WebGPU port of open-water. Renderer, clock, camera, weather, atmosphere, the clear sky (M2) and the water
 // (M3). WebGPU only: three's WebGL2 fallback is refused.
 import * as THREE from 'three/webgpu';
-import { uniform, Fn, max, positionWorldDirection, screenUV, texture, vec2 } from 'three/tsl';
+import { uniform, Fn, max, positionWorldDirection, screenUV, texture, vec2, cameraPosition } from 'three/tsl';
 import type { Engine } from '../boot';
 import { OceanCompute } from './ocean';
 import { AtmosphereCompute } from './atmosphere';
@@ -170,6 +170,10 @@ async function start() {
     sky.cloudsEnv.value = clouds.env;
     skyU.cloudsOn.value = 1;
     skyU.cloudSize.value.set(clouds.w, clouds.h);
+    // crepuscular rays in the haze below the cloud base (as src/main.js uShaft)
+    sky.shaftShadow.value = clouds.shadow;
+    skyU.shaftRect.value.copy(clouds.shadowRect.value);
+    skyU.shaft.value.set(atmoU.mie.value.x * 1e-3, Math.min(S.cloudBase, fOn ? S.sBase : 1e9), S.clouds > 0.05 ? 1 : 0, (elapsed * 0.618) % 1);
     // water-leaving reflectance: deep blue, greyer with bubbles in a high wind, grey-green in rain
     skyU.envRrs.value.fromArray(mixv(mixv([0.0004, 0.003, 0.0085], [0.0012, 0.0026, 0.0022], 0.8 * smoothstep(5, 24, S.wind)), [0.0013, 0.0024, 0.0025], smoothstep(0.1, 0.8, L.rain)));
     sky.renderEnv();
@@ -212,7 +216,7 @@ async function start() {
 
   // the sky with the clouds, and the water
   const scene = new THREE.Scene();
-  scene.backgroundNode = Fn(() => sky.backgroundWithClouds(positionWorldDirection, vec2(screenUV.x, screenUV.y.oneMinus())))();
+  scene.backgroundNode = Fn(() => sky.backgroundWithClouds(positionWorldDirection, vec2(screenUV.x, screenUV.y.oneMinus()), cameraPosition))();
   scene.add(water.mesh);
 
   // the HDR scene (half float, as GL's rgba16f target; no MSAA yet), then open-water's post chain to the canvas.
@@ -269,11 +273,29 @@ async function start() {
     ocean,
     atmo,
     sky,
-    // a half-float storage texture as a Float32Array, rows in texel order (y = 0 first)
-    async readTexture(tex: THREE.Texture) {
-      const { width: w, height: h } = tex.image as { width: number; height: number };
-      const raw = await backend.copyTextureToBuffer(tex, 0, 0, w, h);
-      return Float32Array.from(new (globalThis as any).Float16Array(raw.buffer, raw.byteOffset, w * h * 4));
+    clouds,
+    // one mip level (and z slice of a 3D texture) of an rgba16f or rgba8 texture as a Float32Array, rows in texel
+    // order (y = 0 first), the 256-byte row padding stripped
+    async readTexture(tex: THREE.Texture, level = 0, z = 0) {
+      const { texture: gpuTex, textureDescriptorGPU: desc } = backend.get(tex);
+      if (desc.format !== 'rgba16float' && desc.format !== 'rgba8unorm') throw new Error(`readTexture: format ${desc.format}`);
+      const G = globalThis as any, half = desc.format === 'rgba16float', bpt = half ? 8 : 4;
+      const w = Math.max(gpuTex.width >> level, 1), h = Math.max(gpuTex.height >> level, 1);
+      const row = Math.ceil((w * bpt) / 256) * 256;
+      const buf = device.createBuffer({ size: row * h, usage: G.GPUBufferUsage.COPY_DST | G.GPUBufferUsage.MAP_READ });
+      const enc = device.createCommandEncoder();
+      enc.copyTextureToBuffer({ texture: gpuTex, mipLevel: level, origin: { x: 0, y: 0, z } }, { buffer: buf, bytesPerRow: row }, { width: w, height: h });
+      device.queue.submit([enc.finish()]);
+      await buf.mapAsync(G.GPUMapMode.READ);
+      const raw = new Uint8Array(buf.getMappedRange());
+      const out = new Float32Array(w * h * 4);
+      for (let y = 0; y < h; y++) {
+        const r = raw.subarray(y * row, y * row + w * bpt);
+        const v = half ? new G.Float16Array(r.buffer, r.byteOffset, w * 4) : r;
+        for (let i = 0; i < w * 4; i++) out[y * w * 4 + i] = half ? v[i] : v[i] / 255;
+      }
+      buf.destroy();
+      return out;
     },
     // runs fn inside the same error scopes as a frame; errors land in engine.errors
     async scoped<T>(fn: () => Promise<T>) {

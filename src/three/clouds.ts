@@ -106,10 +106,10 @@ export const cloudU = {
   dark: uniform(0),                          // storm darkness 0..1
   front: uniform(new THREE.Vector4(1, 0, 0, 0)), // squall front: xy unit normal (towards the storm), z offset (m), w width (0 = off)
   frontCell: uniform(new THREE.Vector2()),   // squall cell: x half-length along the line, y depth behind it (m)
-  stormA: uniform(new THREE.Vector4()),      // storm side: coverage, darkness, density, base
+  stormA: uniform(new THREE.Vector4(0, 0, 0, 0)), // storm side: coverage, darkness, density, base
   stormTop: uniform(0),                      // storm side: top (m)
   shapeLod: uniform(-1),                     // debug: >= 0 forces the shape-noise mip level
-  flash: uniform(new THREE.Vector4()),       // lightning position xyz (m), intensity
+  flash: uniform(new THREE.Vector4(0, 0, 0, 0)), // lightning position xyz (m), intensity (Vector4() has w = 1)
   flashColor: uniform(new THREE.Vector3(0.75, 0.8, 1.0)),
 };
 

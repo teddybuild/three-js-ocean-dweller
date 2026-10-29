@@ -20,8 +20,8 @@ const SCENES = {
 };
 // fraction of rows from the top that the metrics cover: at pitch 10 and fov 42 the horizon is at 73 %
 const CROP = { clear: 0.68 };
-// PSNR floors of ported scenes: below it the run fails (2026-10-29: clear sky 48.5 dB, sea 33.4 dB)
-const MIN_PSNR = { clear: 38, sea: 30 };
+// PSNR floors of ported scenes: below it the run fails (2026-10-29: clear sky 48.5 dB, sea 33.4 dB, breeze 33.9 dB)
+const MIN_PSNR = { clear: 38, sea: 30, breeze: 30 };
 const W = 1280, H = 720, WARM = 3, DT = 1 / 30, FRAMES = Math.round(WARM / DT);
 // GL names the device; WebGPU redacts it to vendor + architecture, which on this one-GPU box is the 5080
 const EXPECT = { vendor: /nvidia/i, device: process.env.EXPECT_GPU || 'RTX 5080', architecture: process.env.EXPECT_GPU_ARCH || 'blackwell' };
