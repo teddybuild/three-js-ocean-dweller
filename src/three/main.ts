@@ -1,7 +1,7 @@
 // three.js WebGPU port of open-water. Renderer, clock, camera, weather, atmosphere, the clear sky (M2) and the water
 // (M3). WebGPU only: three's WebGL2 fallback is refused.
 import * as THREE from 'three/webgpu';
-import { uniform, Fn, max, positionWorldDirection } from 'three/tsl';
+import { uniform, Fn, max, positionWorldDirection, screenUV, texture, vec2 } from 'three/tsl';
 import type { Engine } from '../boot';
 import { OceanCompute } from './ocean';
 import { AtmosphereCompute } from './atmosphere';
@@ -9,6 +9,7 @@ import { SkyCompute, skyU } from './sky';
 import { PostChain, type PostOptions } from './post';
 import { WaterMesh } from './water';
 import { FoamTextureCompute } from './foam';
+import { CloudsCompute, cloudU, frontCurve } from './clouds';
 import { OceanProbe } from './probe';
 import { atmoU } from './atmosphere';
 import { Weather } from '../weather.js';
@@ -72,11 +73,18 @@ async function start() {
   weather.snap();
   // FFT sizes follow src/main.js: ?q, else 'high' in ?render and 'rt' live
   const q = params.get('q') || (RENDER_MODE ? 'high' : 'rt');
+  // src/main.js QUALITY, the cloud part (rt: a half-resolution, checkerboarded buffer)
+  const CQ = q === 'rt'
+    ? { div: 2, detailFoot: 50, steps: 80, lightSteps: 5, lightDetail: 2, blend: 0.14, check: true, upSteps: 2 }
+    : { div: 1, detailFoot: 25, steps: q === 'ultra' ? 128 : 96, lightSteps: 6, lightDetail: 3, blend: 0.08, check: false, upSteps: 4 };
   const ocean = new OceanCompute(renderer, q === 'rt' ? [256, 256, 128, 128] : [512, 256, 256, 256]);
   const atmo = new AtmosphereCompute(renderer);
   const sky = new SkyCompute(renderer, atmo);
   const foam = new FoamTextureCompute(renderer);
-  const water = new WaterMesh({ ...ocean.textures(), env: sky.env, sky, foamTex: foam.tex }, { angular: q === 'rt' ? 400 : 640 });
+  const clouds = new CloudsCompute(renderer, sky);
+  const windOffset = [Number(params.get('cx') || 0), 0, Number(params.get('cz') || 0)];
+  let prevFrontDist: number | undefined;
+  const water = new WaterMesh({ ...ocean.textures(), env: sky.env, sky, foamTex: foam.tex, shadow: clouds.shadow, shadowRect: clouds.shadowRect }, { angular: q === 'rt' ? 400 : 640 });
   const gustDrift = [0, 0];
   const probe = new OceanProbe(renderer, ocean.textures());
   // Floating camera, as src/main.js updateCamera + cameraMatrices: heave, pitch and roll with the sea (a small boat
@@ -99,10 +107,10 @@ async function start() {
     // roll: three's lookAt rebuilds the same basis from this up vector
     camera.up.copy(up0.multiplyScalar(Math.cos(cam.roll)).addScaledVector(right0, -Math.sin(cam.roll)));
     camera.lookAt(camera.position.clone().add(fwd));
+    camera.updateMatrixWorld();
   };
   const mixv = (a: number[], b: number[], t: number) => a.map((x, i) => x + (b[i] - x) * t);
-  // per frame, as the top of src/main.js frame(): ocean, light source, LUTs, environment (no squall front yet: the
-  // local weather is the state)
+  // per frame, as the top of src/main.js frame(): ocean, camera, light source, LUTs, squall front, clouds, environment
   const updateWorld = async (dt: number): Promise<PostOptions> => {
     weather.update(dt);
     const S = weather.state;
@@ -116,16 +124,56 @@ async function start() {
     const night = weather.time.sunElev < -7;
     const sun = night ? weather.moonDir() : weather.sunDir();
     atmoU.lightMag.value = night ? -12.7 : -26.74;
-    // fraction of direct sun reaching the haze below the clouds (a closed deck lets none through)
-    atmoU.hazeSun.value = (1 - smoothstep(0.3, 0.9, S.clouds)) * (1 - 0.85 * S.cloudDark) * 0.97 + 0.03 * (1 - S.cloudDark) * (1 - smoothstep(0.8, 0.9, S.clouds));
     atmo.update(sun, camera.position.y, S.haze);
+    // squall front: world-space line ahead of the camera; weather blends across it
+    const cp = camera.position;
+    const fOn = S.front > 0.5;
+    const faz = (S.frontAz * Math.PI) / 180;
+    const fn = [Math.cos(faz), Math.sin(faz)];
+    const fz = cp.x * fn[0] + cp.z * fn[1] + S.frontDist;
+    const fAlong = -cp.x * fn[1] + cp.z * fn[0];
+    const fCurve = frontCurve(fAlong);
+    // squall cell: half-length along the line (centred on along = 0) and depth behind it (0 = endless)
+    const fCell = [S.frontLen / 2, S.frontDepth];
+    const sCam = -S.frontDist - fCurve;
+    const mCam = fOn ? smoothstep(-S.frontWidth, S.frontWidth, Math.min(sCam, (fCell[1] || 1e7) - sCam, (fCell[0] || 1e7) - Math.abs(fAlong))) : 0;
+    const L = {
+      rain: S.rain + (S.sRain - S.rain) * mCam,
+      clouds: S.clouds + (S.sClouds - S.clouds) * mCam,
+      dark: S.cloudDark + (S.sDark - S.cloudDark) * mCam,
+    };
+    // fraction of direct sun reaching the haze below the clouds (a closed deck lets none through)
+    atmoU.hazeSun.value = (1 - smoothstep(0.3, 0.9, L.clouds)) * (1 - 0.85 * L.dark) * 0.97 + 0.03 * (1 - L.dark) * (1 - smoothstep(0.8, 0.9, L.clouds));
     skyU.isMoon.value = night ? 1 : 0;
     skyU.pixelAngle.value = (camera.fov * Math.PI) / 180 / canvas.height;
     skyU.time.value = elapsed;
+    // clouds advect with the wind aloft (~1.6x surface wind), detail evolves slowly
+    const aloft = 4 + S.wind * 1.6;
+    windOffset[0] += Math.cos(wdr) * aloft * dt;
+    windOffset[2] += Math.sin(wdr) * aloft * dt;
+    windOffset[1] += dt * (3 + S.wind * 0.6);
+    // the film's squall front sweeps in time-lapse (km per second): a long cloud history lags behind it as echo bands,
+    // so the history shortens with the front's motion per frame
+    const frontStep = fOn && prevFrontDist !== undefined ? Math.abs(S.frontDist - prevFrontDist) : 0;
+    prevFrontDist = S.frontDist;
+    const cu = cloudU;
+    cu.windOffset.value.fromArray(windOffset);
+    cu.coverage.value = S.clouds; cu.base.value = S.cloudBase; cu.top.value = S.cloudBase + 1800 + S.cloudDark * 5200;
+    cu.density.value = 0.11 - S.cloudDark * 0.05; cu.dark.value = S.cloudDark;
+    cu.front.value.fromArray(fOn ? [fn[0], fn[1], fz, S.frontWidth] : [1, 0, 0, 0]);
+    cu.frontCell.value.fromArray(fCell);
+    cu.stormA.value.set(S.sClouds, S.sDark, 0.11 + S.sDark * 0.17, S.sBase);
+    cu.stormTop.value = S.sTop > 0 ? S.sTop : S.sBase + 2500 + S.sDark * 8000; // cumulonimbus tops ~9-10 km
+    cu.shapeLod.value = params.has('shapelod') ? Number(params.get('shapelod')) : -1;
+    clouds.render(camera, { ...CQ, blend: Math.max(CQ.blend, 0.25 * smoothstep(3, 40, frontStep)) });
+    sky.clouds.value = clouds.screen;
+    sky.cloudsEnv.value = clouds.env;
+    skyU.cloudsOn.value = 1;
+    skyU.cloudSize.value.set(clouds.w, clouds.h);
     // water-leaving reflectance: deep blue, greyer with bubbles in a high wind, grey-green in rain
-    skyU.envRrs.value.fromArray(mixv(mixv([0.0004, 0.003, 0.0085], [0.0012, 0.0026, 0.0022], 0.8 * smoothstep(5, 24, S.wind)), [0.0013, 0.0024, 0.0025], smoothstep(0.1, 0.8, S.rain)));
+    skyU.envRrs.value.fromArray(mixv(mixv([0.0004, 0.003, 0.0085], [0.0012, 0.0026, 0.0022], 0.8 * smoothstep(5, 24, S.wind)), [0.0013, 0.0024, 0.0025], smoothstep(0.1, 0.8, L.rain)));
     sky.renderEnv();
-    // the water's uniforms, as src/main.js waterUniforms (no lightning, rain stipple or cloud shadow yet)
+    // the water's uniforms, as src/main.js waterUniforms (no lightning yet)
     const st = ocean.stats, wu = water.u;
     gustDrift[0] += Math.cos(wdr) * S.wind * 0.9 * dt;
     gustDrift[1] += Math.sin(wdr) * S.wind * 0.9 * dt;
@@ -141,40 +189,42 @@ async function start() {
     wu.foamLace.value = smoothstep(14, 22, S.wind) * 0.45;
     wu.dbgMask.value.fromArray((params.get('dbg') || '1,1,1').split(',').map(Number));
     wu.time.value = elapsed;
-    wu.rain.value = S.rain;
+    wu.rain.value = L.rain;
     wu.windDir.value.set(Math.cos(wdr), Math.sin(wdr));
     wu.foamStretch.value = Math.min(Math.max((S.wind - 10) / 8, 0), 1);
-    // post options, as src/main.js passes them (no squall front or lightning yet)
+    // post options, as src/main.js passes them (no lightning yet)
     // shooting into a low sun a photographer meters the bright sky (scene), not the incident light
     const fwd = camera.getWorldDirection(new THREE.Vector3());
     const fh = Math.hypot(fwd.x, fwd.z) || 1;
-    const backlit = night ? 0 : smoothstep(0.55, 0.95, (fwd.x * sun[0] + fwd.z * sun[2]) / fh / (Math.hypot(sun[0], sun[2]) || 1)) * (1 - smoothstep(12, 35, weather.time.sunElev)) * (1 - S.clouds * 0.8);
-    // how much of the frame a storm fills
-    const stormView = smoothstep(0.7, 0.9, S.clouds) * smoothstep(0.4, 0.8, S.cloudDark);
+    const backlit = night ? 0 : smoothstep(0.55, 0.95, (fwd.x * sun[0] + fwd.z * sun[2]) / fh / (Math.hypot(sun[0], sun[2]) || 1)) * (1 - smoothstep(12, 35, weather.time.sunElev)) * (1 - L.clouds * 0.8);
+    // how much of the frame a storm fills (overhead, or a squall line in view)
+    const stormView = Math.max(smoothstep(0.7, 0.9, L.clouds) * smoothstep(0.4, 0.8, L.dark), fOn ? smoothstep(15000, 3000, S.frontDist) : 0);
     return {
       time: elapsed, bloom: 0.012 + 0.006 * backlit + 0.01 * (night ? 1 : 0),
-      exposureBias: Number(params.get('ev') || 0) - 0.7 * backlit - 1.0 * S.cloudDark * S.cloudDark * (0.4 + 0.6 * S.rain) + 0.8 * (1 - smoothstep(0.2, 0.4, S.clouds)) * smoothstep(35, 50, weather.time.sunElev) + 0.1 * smoothstep(0.8, 0.95, S.clouds) * (1 - smoothstep(0.4, 0.6, S.cloudDark)) * (1 - S.rain),
+      exposureBias: Number(params.get('ev') || 0) - 0.7 * backlit - 1.0 * L.dark * L.dark * (0.4 + 0.6 * L.rain) + 0.8 * (1 - smoothstep(0.2, 0.4, L.clouds)) * smoothstep(35, 50, weather.time.sunElev) + 0.1 * smoothstep(0.8, 0.95, L.clouds) * (1 - smoothstep(0.4, 0.6, L.dark)) * (1 - L.rain),
       incident: 0.65 * (1 - backlit) * (1 - 0.7 * stormView), fade: 1,
-      whiteBalance: params.has('wb') ? Number(params.get('wb')) : (0.1 * smoothstep(0.25, 0.6, S.clouds) + 0.35 * smoothstep(0.8, 0.95, S.clouds)) * (1 - backlit) * (night ? 0 : 1),
+      whiteBalance: params.has('wb') ? Number(params.get('wb')) : (0.1 * smoothstep(0.25, 0.6, L.clouds) + 0.35 * smoothstep(0.8, 0.95, L.clouds)) * (1 - backlit) * (night ? 0 : 1),
       night: night ? 1 : 0,
       look: params.has('look') ? params.get('look')!.split(',').map(Number) : night ? [1.35, 0.4, 1.0, 0.004] : mixv([1.5, 0.4, 1.0, 0.004], [1.6, 0.36, 0.95, 0.03], stormView),
       look2: night ? [1.5, 1.0] : [1.8 - 0.3 * stormView, 1.03 + 0.12 * backlit * (1 - stormView)],
     };
   };
 
-  // the clear sky and the water
+  // the sky with the clouds, and the water
   const scene = new THREE.Scene();
-  scene.backgroundNode = Fn(() => sky.background(positionWorldDirection))();
+  scene.backgroundNode = Fn(() => sky.backgroundWithClouds(positionWorldDirection, vec2(screenUV.x, screenUV.y.oneMinus())))();
   scene.add(water.mesh);
 
   // the HDR scene (half float, as GL's rgba16f target; no MSAA yet), then open-water's post chain to the canvas.
-  // Incident metering: an 18 % grey card under the sun and sky (no cloud shadow yet)
+  // Incident metering: an 18 % grey card under the sun (through the clouds over the camera) and sky
   const hdr = new THREE.RenderTarget(1, 1, { type: THREE.HalfFloatType });
-  const post = new PostChain(renderer, { incidentE: sky.sunIlluminance().mul(max(atmoU.sun.y, 0)).add(sky.skyIrradiance()) });
+  const vis = (texture as any)(clouds.shadow, (vec2 as any)(0.5)).level(0).r;
+  const post = new PostChain(renderer, { incidentE: sky.sunIlluminance().mul(vis).mul(max(atmoU.sun.y, 0)).add(sky.skyIrradiance()) });
   const resize = () => {
     renderer.setSize(window.innerWidth, window.innerHeight, false);
     const size = renderer.getDrawingBufferSize(new THREE.Vector2());
     hdr.setSize(size.x, size.y);
+    clouds.resize(size.x, size.y, CQ.div);
     post.resize(size.x, size.y);
     camera.aspect = window.innerWidth / window.innerHeight;
     camera.updateProjectionMatrix();

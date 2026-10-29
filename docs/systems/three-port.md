@@ -32,6 +32,10 @@ How the port is built and checked. Decision: `docs/adr/0001-three-webgpu-port.md
   foam texture is a compute kernel. Stubs until M4/M5: sun visibility is `atmoU.hazeSun` (GL's value outside the
   cloud-shadow rect), no shafts, no fog, no lightning. The camera floats on `OceanProbe` as GL's `updateCamera`;
   `?render` awaits each probe read, live uses the last finished one.
+- Clouds (`src/three/clouds.ts`, M4, lighting not yet matching GL): noise volumes, weather map, shadow map, env and
+  screen passes as compute kernels writing GL's texel layout (v up). 3D mips are written level by level (three only
+  generates 2D mips). The screen pass builds rays from the camera basis and reprojects with the previous basis.
+  `sky.backgroundWithClouds` composites them; texture nodes `sky.clouds` / `sky.cloudsEnv` are re-pointed per frame.
 
 ## Checks
 
@@ -65,6 +69,8 @@ Fill one row per GPU resource as it is ported. The GL column comes from the 2026
 | FFT ping-pong | 2 MRT pairs rgba32f per size | 2 x 2 vec4 buffers per size | `src/three/ocean.ts` | M1; shared by cascades of one size, result in A |
 | disp + foam, slope | rgba16f x2, mips | vec4 f32 buffers x2 per cascade, copied to half-float textures with mips | `src/three/ocean.ts` | M1, M3a |
 | foam structure | rgba8 1024^2, mips, aniso 8 | StorageTexture rgba8, auto-mips, aniso 8 | `src/three/foam.ts` | M3 |
+| shape, detail volumes | rgba8 3D 128^3 / 32^3, mips | Storage3DTexture rgba8, mips written by hand | `src/three/clouds.ts` | M4 |
+| clouds screen, depth, env, shadow | rgba16f / r16f, history pairs | half-float StorageTextures (rgba16f: r16f storage needs a feature) | `src/three/clouds.ts` | M4 |
 | probe | rgba32f 2x1 + PBO/fence | vec4 storage buffer x2, `getArrayBufferAsync` | `src/three/probe.ts` | M3 |
 | active breaking | r16f x2, mips | float f32 buffers x2 per cascade | `src/three/ocean.ts` | M1 |
 | Atmosphere LUTs | rgba16f 256x64, 32x32, 256x128, 64x64 | half-float StorageTextures, same sizes | `src/three/atmosphere.ts` | M2 |

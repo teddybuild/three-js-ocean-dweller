@@ -2,7 +2,7 @@
 // cascades (mip level per ring, earth curvature), shaded with a slope-variance (LEAN / Bruneton 2010) Beckmann BRDF,
 // the reflected environment, physically based water-leaving radiance, crest subsurface scattering, foam, active
 // breaking, glints, the mirrored lightning channel and aerial perspective. RAIN_SURFACE_GLSL (src/fx/ripples.js)
-// is ported here too. Cloud shadow, crepuscular rays and fog are stubs until milestones 4 and 5.
+// is ported here too. Crepuscular rays and fog are stubs until milestone 5.
 // Derivatives and implicit-LOD samples are all taken (and stored in vars) before any non-uniform branch: WGSL
 // requires uniform control flow for them, and three emits select() as if/else blocks.
 import * as THREE from 'three/webgpu';
@@ -30,6 +30,8 @@ export interface WaterInputs {
   env: THREE.Texture;      // equirect 512x256 with mips (SkyCompute.env)
   sky: SkyCompute;
   foamTex: THREE.Texture;
+  shadow: THREE.Texture;   // cloud-shadow map (CloudsCompute.shadow)
+  shadowRect: Node;        // its origin xz and 1/size (CloudsCompute.shadowRect)
 }
 
 // ---- RAIN_SURFACE_GLSL: raindrop impact ring waves (procedural, analytic slopes). Capillary ring packets expand at
@@ -377,8 +379,10 @@ export class WaterMesh {
       const sigmaV = sqrt(dot(vh.mul(vh), sigmaSq)).toVar();
       const F = meanFresnel(nv, sigmaV).mul(0.98).add(0.02).toVar();
 
-      // sun visibility through clouds: until the cloud shadow map lands (milestone 4), GL's value outside its rect
-      const sunVis = atmoU.hazeSun;
+      // sun visibility through clouds
+      const suv = P.xz.sub(inp.shadowRect.xy).mul(inp.shadowRect.zw).toVar();
+      const sunVis = mix(atmoU.hazeSun, texture(inp.shadow, suv).level(0).r,
+        smoothstep(0, 0.04, min(min(suv.x, suv.y), min(suv.x.oneMinus(), suv.y.oneMinus())))).toVar();
 
       // reflection of the sky / clouds, blurred by the unresolved roughness (GL's unused dR = |fwidth(R)| dropped)
       const R0 = reflect(V.negate(), N).toVar();

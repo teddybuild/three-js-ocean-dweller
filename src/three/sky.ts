@@ -1,7 +1,7 @@
 // open-water's sky (src/sky/sky.js) and the LUT lookups of SKY_LOOKUP_GLSL (src/sky/atmosphere.js) in TSL: sky
 // radiance, transmittance, aerial perspective, irradiance, stars, the sun and moon disk, the equirectangular
-// reflection environment (with its mip chain) and its irradiance. Clouds, fog, rain curtains and crepuscular rays
-// come with milestones 4 and 5; until then the background is the clear-sky branch of SKY_FS.
+// reflection environment (with its mip chain) and its irradiance, both with the clouds composited (M4). Fog, rain
+// curtains and crepuscular rays come with milestone 5.
 import * as THREE from 'three/webgpu';
 import * as TSL from 'three/tsl';
 import { atmoU, AtmosphereCompute } from './atmosphere';
@@ -10,6 +10,7 @@ type Node = any; // @types/three's TSL overloads reject long node chains, so nod
 const {
   Fn, Loop, uniform, float, int, vec2, vec3, vec4, uvec2, select, sqrt, pow, exp, log, abs, cos, sin, acos, asin, atan,
   clamp, mix, smoothstep, max, min, normalize, dot, cross, sign, textureStore, texture, instanceIndex, floor, fract,
+  fwidth, ivec2,
 } = TSL as any;
 
 const PI = Math.PI;
@@ -17,6 +18,7 @@ const SUN_COS = 0.99998917; // cos(0.2666 deg)
 
 export const skyU = {
   sunVis: uniform(1), isMoon: uniform(0), pixelAngle: uniform(0.001), time: uniform(0),
+  cloudsOn: uniform(0), cloudSize: uniform(new THREE.Vector2(1, 1)),
   envRrs: uniform(new THREE.Vector3(0.0004, 0.003, 0.0085)), // the sea's water-leaving reflectance (1/sr)
 };
 
@@ -45,6 +47,10 @@ const equirectUv = (d: Node) => vec2(atan(d.z, d.x).div(2 * PI).add(0.5), acos(c
 export class SkyCompute {
   env = Object.assign(envTexture(512, 256, true), { anisotropy: 16 }); // (GL: aniso 16, the water's streak blur)
   envDeck = envTexture(512, 256, false); // the same without rain and mist: the light entering them
+  // the cloud passes' outputs (ping-pong: the caller sets .value every frame, see setClouds)
+  private blank = (() => { const t = new THREE.StorageTexture(1, 1); t.type = THREE.HalfFloatType; return t; })();
+  cloudsEnv = texture(this.blank);
+  clouds = texture(this.blank);
   irradiance = (() => { const t = new THREE.StorageTexture(2, 1); t.type = THREE.HalfFloatType; t.minFilter = t.magFilter = THREE.NearestFilter; return t; })();
   private renderer: THREE.WebGPURenderer;
   private atmo: AtmosphereCompute;
@@ -159,6 +165,42 @@ export class SkyCompute {
     return this.skyRadiance(d).add(this.starField(d)).add(select(c.greaterThan(wEdge.negate().add(SUN_COS)), disk, vec3(0)));
   }
 
+  // the background of SKY_FS with the clouds composited; uv: screen uv with v up (GL's vUv). Fog and shafts: M5.
+  backgroundWithClouds(d0: Node, uv: Node) {
+    const d = normalize(d0).toVar();
+    const col = this.background(d).toVar();
+    // a low-resolution buffer is upsampled with Catmull-Rom (sharp: a tent or bilinear filter smears the billows into
+    // mush), clamped to the four nearest texels so edges cannot ring
+    const cts = skyU.cloudSize;
+    const lowRes = cts.x.lessThan(256 * 4).and(cts.x.mul(1.5).lessThan(float(1).div(max(fwidth(uv.x), 1e-6)))).toVar();
+    const cl = select(lowRes, this.cloudBicubic(uv, cts), this.clouds.sample(uv).level(0)).toVar();
+    const sky = this.skyRadiance(d).toVar();
+    const skyCol = sky.add(col.sub(sky).mul(cl.a).mul(cl.a));
+    return select(skyU.cloudsOn.greaterThan(0.5), skyCol.mul(cl.a).add(cl.rgb), col);
+  }
+
+  private cloudBicubic(uv: Node, size: Node) {
+    const sp = uv.mul(size).sub(0.5).toVar();
+    const tp = floor(sp).add(0.5);
+    const f = sp.sub(floor(sp)).toVar();
+    const w0 = f.mul(f.mul(f.mul(-0.5).add(1)).sub(0.5));
+    const w1 = f.mul(f).mul(f.mul(1.5).sub(2.5)).add(1);
+    const w2 = f.mul(f.mul(f.mul(-1.5).add(2)).add(0.5)).toVar();
+    const w3 = f.mul(f).mul(f.mul(0.5).sub(0.5));
+    const w12 = w1.add(w2).toVar();
+    const t0 = tp.sub(1).div(size).toVar(), t3 = tp.add(2).div(size).toVar(), t12 = tp.add(w2.div(w12)).div(size).toVar();
+    const tx = (u: Node) => this.clouds.sample(u).level(0);
+    const r = tx(vec2(t12.x, t0.y)).mul(w12.x.mul(w0.y))
+      .add(tx(vec2(t0.x, t12.y)).mul(w0.x.mul(w12.y))).add(tx(t12).mul(w12.x.mul(w12.y))).add(tx(vec2(t3.x, t12.y)).mul(w3.x.mul(w12.y)))
+      .add(tx(vec2(t12.x, t3.y)).mul(w12.x.mul(w3.y)))
+      .div(w12.x.mul(w0.y).add(w0.x.mul(w12.y)).add(w12.x.mul(w12.y)).add(w3.x.mul(w12.y)).add(w12.x.mul(w3.y)));
+    const ip = ivec2(floor(sp)).toVar();
+    const mx = ivec2(size).sub(1);
+    const ld = (o: number[]) => this.clouds.load(clamp(ip.add(ivec2(o[0], o[1])), ivec2(0), mx)).level(int(0));
+    const a = ld([0, 0]).toVar(), b = ld([1, 0]).toVar(), c = ld([0, 1]).toVar(), e = ld([1, 1]).toVar();
+    return clamp(r, min(min(a, b), min(c, e)), max(max(a, b), max(c, e)));
+  }
+
   private envKernel() {
     const env = this.env, envDeck = this.envDeck;
     return Fn(() => {
@@ -170,6 +212,9 @@ export class SkyCompute {
       const theta = min(uv.y, uv.y.oneMinus()).mul(PI).toVar();
       const d = normalize(vec3(cos(phi).mul(sin(theta)), cos(theta), sin(phi).mul(sin(theta))).add(vec3(0, 0.002, 0))).toVar();
       const col = this.skyRadiance(d).toVar();
+      const vUp = min(uv.y, uv.y.oneMinus());
+      const cl = this.cloudsEnv.sample(vec2(uv.x, min(vUp, 0.5 - 0.6 / 160))).level(0).toVar();
+      col.assign(select(skyU.cloudsOn.greaterThan(0.5), col.mul(cl.a).add(cl.rgb), col));
       // A ray reflected below the horizon meets the next wave nearby and sees that wave: the sky mirrored by its Fresnel
       // reflectance and its water. This half only feeds the mip chain, whose wide blur on a rough sea must not average
       // in the haze glare that hugs the horizon.
