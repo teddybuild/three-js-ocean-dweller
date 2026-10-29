@@ -11,7 +11,7 @@ export interface Engine {
   step(n: number, dt: number): Promise<void>;
   capture(dt: number): Promise<string>;
   frames: number;
-  nodeFrame?: number;  // three only: NodeFrame.frameId, proof that three's frame lifecycle advanced per step
+  nodeFrame?: number;  // three only: NodeFrame.frameId advances since the engine started; must equal frames
   errors: string[];
   adapter: AdapterInfo;
 }

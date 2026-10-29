@@ -72,6 +72,7 @@ async function start() {
     camera.updateProjectionMatrix();
   });
 
+  const nodeFrame0 = internals._nodes.nodeFrame.frameId as number;
   const frame = (dt: number) => {
     elapsed += dt;
     uTime.value = elapsed;
@@ -94,7 +95,7 @@ async function start() {
     // one more frame, read in the same task: the WebGPU canvas texture is only valid until the task ends
     async capture(dt) { frame(dt); const png = canvas.toDataURL('image/png'); await settle(); return png; },
     frames: 0,
-    get nodeFrame() { return internals._nodes.nodeFrame.frameId as number; },
+    get nodeFrame() { return (internals._nodes.nodeFrame.frameId as number) - nodeFrame0; },
     errors,
     adapter: { vendor: ai.vendor, architecture: ai.architecture, description: ai.description, fallback: typeof ai.isFallbackAdapter === 'boolean' ? ai.isFallbackAdapter : null },
   };

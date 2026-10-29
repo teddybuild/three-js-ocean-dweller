@@ -15,7 +15,8 @@ const SCENES = {
   squall: 'preset=breeze&float=0&front=1&frontDist=15000&frontAz=60&yaw=60&pitch=3&frontLen=8000&frontDepth=4000&frontWidth=1000&sTop=3500&sBase=900',
 };
 const W = 1280, H = 720, WARM = 3, DT = 1 / 30, FRAMES = Math.round(WARM / DT);
-const EXPECT = { vendor: /nvidia/i, architecture: process.env.EXPECT_GPU_ARCH || 'blackwell' };
+// GL names the device; WebGPU redacts it to vendor + architecture, which on this one-GPU box is the 5080
+const EXPECT = { vendor: /nvidia/i, device: process.env.EXPECT_GPU || 'RTX 5080', architecture: process.env.EXPECT_GPU_ARCH || 'blackwell' };
 
 export function psnr(a, b) {
   let se = 0, n = 0;
@@ -38,8 +39,8 @@ export function verdict(gl, three) {
     if (c.frames !== FRAMES) f.push(`${name} rendered ${c.frames} frames, expected ${FRAMES}`);
     for (const e of c.errors) f.push(`${name} error: ${e}`);
   }
-  if (three.nodeFrame !== undefined && three.nodeFrame < FRAMES) f.push(`three NodeFrame advanced ${three.nodeFrame} times in ${FRAMES} frames`);
-  if (!EXPECT.vendor.test(gl.adapter.vendor)) f.push(`gl adapter ${gl.adapter.vendor}, expected NVIDIA`);
+  if (three.nodeFrame !== FRAMES) f.push(`three NodeFrame advanced ${three.nodeFrame} times in ${FRAMES} frames`);
+  if (!gl.adapter.vendor.includes(EXPECT.device)) f.push(`gl adapter ${gl.adapter.vendor}, expected ${EXPECT.device}`);
   const a = three.adapter;
   if (!EXPECT.vendor.test(a.vendor) || a.architecture !== EXPECT.architecture) f.push(`three adapter ${a.vendor} ${a.architecture}, expected nvidia ${EXPECT.architecture}`);
   if (a.fallback !== false) f.push(`three fallback adapter: ${a.fallback}`);
@@ -54,7 +55,7 @@ function singleColour(img) {
 
 // Known-bad checks: verdict() must reject each broken case, and the metrics must see a corrupted image.
 function selfTest(img) {
-  const ok = { img, errors: [], frames: FRAMES, nodeFrame: FRAMES, adapter: { vendor: 'nvidia', architecture: EXPECT.architecture, fallback: false } };
+  const ok = { img, errors: [], frames: FRAMES, nodeFrame: FRAMES, adapter: { vendor: `NVIDIA GeForce ${EXPECT.device}`, architecture: EXPECT.architecture, fallback: false } };
   const small = new PNG({ width: 64, height: 64 });
   const flat = new PNG({ width: img.width, height: img.height });
   const noisy = new PNG({ width: img.width, height: img.height });
@@ -72,7 +73,8 @@ function selfTest(img) {
     ['gl on another GPU fails', verdict({ ...ok, adapter: { ...ok.adapter, vendor: 'SwiftShader' } }, ok).length > 0],
     ['single-colour capture fails', verdict(ok, { ...ok, img: flat }).length > 0],
     ['wrong frame count fails', verdict({ ...ok, frames: FRAMES + 1 }, ok).length > 0],
-    ['stalled NodeFrame fails', verdict(ok, { ...ok, nodeFrame: 1 }).length > 0],
+    ['gl on another NVIDIA GPU fails', verdict({ ...ok, adapter: { ...ok.adapter, vendor: 'NVIDIA GeForce RTX 5070' } }, ok).length > 0],
+    ...[1, 1000, NaN, undefined].map((n) => [`NodeFrame ${n} fails`, verdict(ok, { ...ok, nodeFrame: n }).length > 0]),
     ['identical image: PSNR Infinity, 0 % mismatch', (() => { const r = compare(img, img); return r.psnr === Infinity && r.mismatch === 0; })()],
     ['noisy image: PSNR < 40, mismatch > 50 %', (() => { const r = compare(img, noisy); return r.psnr < 40 && r.mismatch > 50; })()],
   ];
