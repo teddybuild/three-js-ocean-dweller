@@ -43,7 +43,7 @@ function mnoise(p: Node) {
 const equirectUv = (d: Node) => vec2(atan(d.z, d.x).div(2 * PI).add(0.5), acos(clamp(d.y, -1, 1)).div(PI));
 
 export class SkyCompute {
-  env = envTexture(512, 256, true);
+  env = Object.assign(envTexture(512, 256, true), { anisotropy: 16 }); // (GL: aniso 16, the water's streak blur)
   envDeck = envTexture(512, 256, false); // the same without rain and mist: the light entering them
   irradiance = (() => { const t = new THREE.StorageTexture(2, 1); t.type = THREE.HalfFloatType; t.minFilter = t.magFilter = THREE.NearestFilter; return t; })();
   private renderer: THREE.WebGPURenderer;

@@ -1,5 +1,5 @@
-// three.js WebGPU port of open-water. Renderer, clock, camera, weather, atmosphere and the clear sky (M2); the sea
-// is a flat placeholder until the water lands (M3). WebGPU only: three's WebGL2 fallback is refused.
+// three.js WebGPU port of open-water. Renderer, clock, camera, weather, atmosphere, the clear sky (M2) and the water
+// (M3). WebGPU only: three's WebGL2 fallback is refused.
 import * as THREE from 'three/webgpu';
 import { uniform, Fn, max, positionWorldDirection } from 'three/tsl';
 import type { Engine } from '../boot';
@@ -7,6 +7,9 @@ import { OceanCompute } from './ocean';
 import { AtmosphereCompute } from './atmosphere';
 import { SkyCompute, skyU } from './sky';
 import { PostChain, type PostOptions } from './post';
+import { WaterMesh } from './water';
+import { FoamTextureCompute } from './foam';
+import { OceanProbe } from './probe';
 import { atmoU } from './atmosphere';
 import { Weather } from '../weather.js';
 import { smoothstep } from '../math.js';
@@ -53,12 +56,13 @@ async function start() {
   renderer.setSize(window.innerWidth, window.innerHeight, false);
 
   // camera: same URL keys, defaults and clip planes as src/main.js (eye height h, yaw/pitch in degrees, vertical
-  // fov). The GL camera rides the waves unless ?float=0; this one is still until the probe is ported.
-  const yaw = (Number(params.get('yaw') || 200) * Math.PI) / 180;
-  const pitch = (Number(params.get('pitch') ?? 1.5) * Math.PI) / 180;
+  // fov). It rides the waves unless ?float=0 (updateCamera).
+  const cam = {
+    eye: Number(params.get('h') || 3), base: [0, 0], heave: 0, roll: 0, tilt: 0, float: params.get('float') !== '0',
+    yaw: (Number(params.get('yaw') || 200) * Math.PI) / 180, pitch: (Number(params.get('pitch') ?? 1.5) * Math.PI) / 180,
+  };
   const camera = new THREE.PerspectiveCamera(Number(params.get('fov') || 42), window.innerWidth / window.innerHeight, 0.2, 80000);
-  camera.position.set(0, Number(params.get('h') || 3), 0);
-  camera.lookAt(camera.position.clone().add(new THREE.Vector3(Math.cos(pitch) * Math.cos(yaw), Math.sin(pitch), Math.cos(pitch) * Math.sin(yaw))));
+  camera.position.set(0, cam.eye, 0);
 
   // weather: same preset, URL keys and snap as src/main.js
   const weather = new Weather(params.get('preset') || 'breeze');
@@ -71,10 +75,35 @@ async function start() {
   const ocean = new OceanCompute(renderer, q === 'rt' ? [256, 256, 128, 128] : [512, 256, 256, 256]);
   const atmo = new AtmosphereCompute(renderer);
   const sky = new SkyCompute(renderer, atmo);
+  const foam = new FoamTextureCompute(renderer);
+  const water = new WaterMesh({ ...ocean.textures(), env: sky.env, sky, foamTex: foam.tex }, { angular: q === 'rt' ? 400 : 640 });
+  const gustDrift = [0, 0];
+  const probe = new OceanProbe(renderer, ocean.textures());
+  // Floating camera, as src/main.js updateCamera + cameraMatrices: heave, pitch and roll with the sea (a small boat
+  // responds to waves longer than itself, so the probe samples a mip level matching an ~8 m hull). ?render waits
+  // for the probe (GL's sync readback); live uses the last finished one.
+  const updateCamera = async (dt: number) => {
+    const r = !cam.float ? probe.result : RENDER_MODE ? await probe.read(cam.base, 8) : probe.run(cam.base, 8);
+    const f = cam.float ? 1 - Math.min(Math.max((cam.eye - 12) / 28, 0), 1) : 0;
+    const k = 1 - Math.exp(-dt * 5);
+    cam.heave += (r.height * f - cam.heave) * k;
+    const fx = Math.cos(cam.yaw), fz = Math.sin(cam.yaw);
+    const along = r.sx * fx + r.sz * fz, across = -r.sx * fz + r.sz * fx;
+    cam.tilt += (Math.atan(along) * 0.55 * f - cam.tilt) * k;
+    cam.roll += (Math.atan(across) * 0.55 * f - cam.roll) * k;
+    camera.position.set(cam.base[0] + r.dx * f * 0.8, cam.eye + cam.heave, cam.base[1] + r.dz * f * 0.8);
+    const pitch = cam.pitch + cam.tilt;
+    const fwd = new THREE.Vector3(Math.cos(pitch) * Math.cos(cam.yaw), Math.sin(pitch), Math.cos(pitch) * Math.sin(cam.yaw));
+    const right0 = fwd.clone().cross(camera.up.set(0, 1, 0)).normalize();
+    const up0 = right0.clone().cross(fwd);
+    // roll: three's lookAt rebuilds the same basis from this up vector
+    camera.up.copy(up0.multiplyScalar(Math.cos(cam.roll)).addScaledVector(right0, -Math.sin(cam.roll)));
+    camera.lookAt(camera.position.clone().add(fwd));
+  };
   const mixv = (a: number[], b: number[], t: number) => a.map((x, i) => x + (b[i] - x) * t);
   // per frame, as the top of src/main.js frame(): ocean, light source, LUTs, environment (no squall front yet: the
   // local weather is the state)
-  const updateWorld = (dt: number): PostOptions => {
+  const updateWorld = async (dt: number): Promise<PostOptions> => {
     weather.update(dt);
     const S = weather.state;
     ocean.lambda = Math.max(S.choppy, weather.choppyFor(S.wind));
@@ -83,6 +112,7 @@ async function start() {
     ocean.drift = [Math.cos(wdr) * 0.035 * S.wind, Math.sin(wdr) * 0.035 * S.wind];
     ocean.setSpectrum(weather.spectrum());
     ocean.update(elapsed, dt, weather.foam());
+    await updateCamera(dt);
     const night = weather.time.sunElev < -7;
     const sun = night ? weather.moonDir() : weather.sunDir();
     atmoU.lightMag.value = night ? -12.7 : -26.74;
@@ -95,6 +125,25 @@ async function start() {
     // water-leaving reflectance: deep blue, greyer with bubbles in a high wind, grey-green in rain
     skyU.envRrs.value.fromArray(mixv(mixv([0.0004, 0.003, 0.0085], [0.0012, 0.0026, 0.0022], 0.8 * smoothstep(5, 24, S.wind)), [0.0013, 0.0024, 0.0025], smoothstep(0.1, 0.8, S.rain)));
     sky.renderEnv();
+    // the water's uniforms, as src/main.js waterUniforms (no lightning, rain stipple or cloud shadow yet)
+    const st = ocean.stats, wu = water.u;
+    gustDrift[0] += Math.cos(wdr) * S.wind * 0.9 * dt;
+    gustDrift[1] += Math.sin(wdr) * S.wind * 0.9 * dt;
+    wu.camPos.value.copy(camera.position);
+    wu.longSlope.value = Math.max(Math.sqrt(st.bandMss[0] * 0.6), 0.01);
+    wu.glintExp.value = night ? 15 : 1;
+    wu.unresolved.value = st.unresolved;
+    wu.mssTotal.value = Math.max(st.coxMunk, st.resolvedMss + st.unresolved);
+    wu.hs.value = st.hs;
+    wu.rrs.value.copy(skyU.envRrs.value);
+    wu.gust.value.set(0.25 + 0.4 * smoothstep(1.5, 4, S.wind) * (1 - smoothstep(6, 12, S.wind)), gustDrift[0], gustDrift[1]);
+    wu.foamAmount.value = params.has('nofoam') ? 0 : 1;
+    wu.foamLace.value = smoothstep(14, 22, S.wind) * 0.45;
+    wu.dbgMask.value.fromArray((params.get('dbg') || '1,1,1').split(',').map(Number));
+    wu.time.value = elapsed;
+    wu.rain.value = S.rain;
+    wu.windDir.value.set(Math.cos(wdr), Math.sin(wdr));
+    wu.foamStretch.value = Math.min(Math.max((S.wind - 10) / 8, 0), 1);
     // post options, as src/main.js passes them (no squall front or lightning yet)
     // shooting into a low sun a photographer meters the bright sky (scene), not the incident light
     const fwd = camera.getWorldDirection(new THREE.Vector3());
@@ -113,12 +162,10 @@ async function start() {
     };
   };
 
-  // the clear sky, and a flat placeholder sea
+  // the clear sky and the water
   const scene = new THREE.Scene();
   scene.backgroundNode = Fn(() => sky.background(positionWorldDirection))();
-  const sea = new THREE.Mesh(new THREE.PlaneGeometry(160000, 160000), new THREE.MeshBasicNodeMaterial({ color: 0x1b3550 }));
-  sea.rotation.x = -Math.PI / 2;
-  scene.add(sea);
+  scene.add(water.mesh);
 
   // the HDR scene (half float, as GL's rgba16f target; no MSAA yet), then open-water's post chain to the canvas.
   // Incident metering: an 18 % grey card under the sun and sky (no cloud shadow yet)
@@ -136,12 +183,12 @@ async function start() {
   window.addEventListener('resize', resize);
 
   const nodeFrame0 = internals._nodes.nodeFrame.frameId as number;
-  const frame = (dt: number) => {
+  const frame = async (dt: number) => {
     elapsed += dt;
     uTime.value = elapsed;
     if (RENDER_MODE) { internals.info.reset(); internals._nodes.nodeFrame.update(); }
     for (const s of scopes) device.pushErrorScope(s);
-    const postOpts = updateWorld(dt);
+    const postOpts = await updateWorld(dt);
     renderer.setRenderTarget(hdr);
     renderer.render(scene, camera);
     renderer.setRenderTarget(null);
@@ -158,9 +205,9 @@ async function start() {
   };
   const engine: Engine = {
     name: 'three',
-    async step(n, dt) { for (let i = 0; i < n; i++) frame(dt); await settle(); },
+    async step(n, dt) { for (let i = 0; i < n; i++) await frame(dt); await settle(); },
     // one more frame, read in the same task: the WebGPU canvas texture is only valid until the task ends
-    async capture(dt) { frame(dt); const png = canvas.toDataURL('image/png'); await settle(); return png; },
+    async capture(dt) { await frame(dt); const png = canvas.toDataURL('image/png'); await settle(); return png; },
     frames: 0,
     get nodeFrame() { return (internals._nodes.nodeFrame.frameId as number) - nodeFrame0; },
     errors,

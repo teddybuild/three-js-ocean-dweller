@@ -15,11 +15,13 @@ const SCENES = {
   squall: 'preset=breeze&float=0&front=1&frontDist=15000&frontAz=60&yaw=60&pitch=3&frontLen=8000&frontDepth=4000&frontWidth=1000&sTop=3500&sBase=900',
   // the clear sky alone (milestone 2): no clouds, camera 10 deg up, metrics over the top rows only
   clear: 'preset=breeze&float=0&clouds=0&pitch=10',
+  // the water under the clear sky (milestone 3)
+  sea: 'preset=breeze&float=0&clouds=0',
 };
 // fraction of rows from the top that the metrics cover: at pitch 10 and fov 42 the horizon is at 73 %
 const CROP = { clear: 0.68 };
-// PSNR floors of ported scenes: below it the run fails (clear sky 41.6 dB on 2026-10-29)
-const MIN_PSNR = { clear: 38 };
+// PSNR floors of ported scenes: below it the run fails (2026-10-29: clear sky 48.5 dB, sea 33.4 dB)
+const MIN_PSNR = { clear: 38, sea: 30 };
 const W = 1280, H = 720, WARM = 3, DT = 1 / 30, FRAMES = Math.round(WARM / DT);
 // GL names the device; WebGPU redacts it to vendor + architecture, which on this one-GPU box is the 5080
 const EXPECT = { vendor: /nvidia/i, device: process.env.EXPECT_GPU || 'RTX 5080', architecture: process.env.EXPECT_GPU_ARCH || 'blackwell' };
