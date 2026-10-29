@@ -5,28 +5,13 @@
 //    limits. --self-test also checks that a forward-transform reference and a swapped cascade fail.
 // Exit 1 on any failure or page error. Needs the dev server on :5173.
 import { launch, openApp } from './browser.mjs';
+import { B64, toF32, relRms, reporter, pageErrors } from './compare.mjs';
 
 const W = 1280, H = 720, STEPS = 3, DT = 1 / 30, T0 = 37.3;
 const SIZES = [128, 256, 512];
 // relative RMS error limits, about 5-20x the 2026-10-29 run: f32 against f32, and f32 against GL's f16 render targets
 const LIMIT = { fft: 1e-5, h0: 1e-5, disp: 2e-3, slope: 2e-3, foam: 5e-3, active: 5e-3 };
 const selfTest = process.argv.includes('--self-test');
-
-const toF32 = (b64) => { const b = Buffer.from(b64, 'base64'); return new Float32Array(b.buffer, b.byteOffset, b.length / 4); };
-// in-page: Float32Array -> base64
-const B64 = `(a) => { const u = new Uint8Array(a.buffer, a.byteOffset, a.byteLength); let s = '';
-  for (let i = 0; i < u.length; i += 0x8000) s += String.fromCharCode.apply(null, u.subarray(i, i + 0x8000)); return btoa(s); }`;
-
-// relative RMS of (got - want) over channels `ch` of a stride-`stride` buffer
-function relRms(got, want, stride = 4, ch = [0, 1, 2, 3], gotStride = stride, gotCh = ch) {
-  let e = 0, r = 0;
-  const n = want.length / stride;
-  for (let i = 0; i < n; i++) for (let c = 0; c < ch.length; c++) {
-    const w = want[i * stride + ch[c]], d = got[i * gotStride + gotCh[c]] - w;
-    e += d * d; r += w * w;
-  }
-  return r === 0 ? (e === 0 ? 0 : Infinity) : Math.sqrt(e / r);
-}
 
 // 2D inverse DFT, out[x] = sum_k in[k] e^{+2 pi i k x / n} (sign < 0: forward), of the 4 complex signals packed in a
 // vec4 pair, one row then one column at a time
@@ -68,23 +53,12 @@ function fftCases(n) {
   return { impulse, mode, noise };
 }
 
-const failures = [];
-const report = (label, err, limit, mustFail = false) => {
-  const bad = !(err <= limit);
-  const pass = mustFail ? bad : !bad;
-  if (!pass) failures.push(label);
-  console.log(`${pass ? 'ok  ' : 'FAIL'} ${label}: rel rms ${err.toExponential(2)} ${mustFail ? 'must exceed' : 'limit'} ${limit}`);
-};
-
-async function pageErrors(page, engineName) {
-  const errs = await page.evaluate(() => window.engine?.errors ?? []);
-  for (const e of [...errs, ...page.collectedErrors]) failures.push(`${engineName} error: ${e}`);
-}
+const { failures, report } = reporter();
 
 const browser = await launch({ width: W, height: H });
 try {
   const three = await openApp(browser, 'http://localhost:5173/?render&engine=three', { width: W, height: H });
-  await three.waitForFunction(() => window.oceanTest, { timeout: 60000 });
+  await three.waitForFunction(() => window.portTest, { timeout: 60000 });
 
   // 1. bare FFT against the CPU DFT
   for (const n of SIZES) {
@@ -92,7 +66,7 @@ try {
       const got = await three.evaluate(async (n, a, b, B64) => {
         const enc = eval(B64);
         const dec = (s) => { const u = Uint8Array.from(atob(s), (c) => c.charCodeAt(0)); return new Float32Array(u.buffer); };
-        const T = window.oceanTest;
+        const T = window.portTest;
         return (await T.scoped(() => T.ocean.fftOnly(n, dec(a), dec(b)))).map(enc);
       }, n, Buffer.from(d0.buffer).toString('base64'), Buffer.from(d1.buffer).toString('base64'), B64);
       const [g0, g1] = got.map(toF32);
@@ -139,7 +113,7 @@ try {
 
   const got = await three.evaluate(async (P, STEPS, DT, T0, B64) => {
     const enc = eval(B64);
-    const T = window.oceanTest, o = T.ocean;
+    const T = window.portTest, o = T.ocean;
     return T.scoped(async () => {
       o.lambda = P.lambda; o.drift = P.drift;
       o.setSpectrum(P.spectrum);
@@ -167,8 +141,8 @@ try {
   });
   if (selfTest) report('self-test cascade 1 disp against cascade 2', relRms(T[1].disp, G[2].disp, 4, [0, 1, 2]), LIMIT.disp, true);
 
-  await pageErrors(three, 'three');
-  await pageErrors(gl, 'gl');
+  await pageErrors(three, 'three', failures);
+  await pageErrors(gl, 'gl', failures);
 } finally {
   await browser.close();
 }

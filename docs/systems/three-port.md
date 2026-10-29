@@ -16,7 +16,7 @@ How the port is built and checked. Decision: `docs/adr/0001-three-webgpu-port.md
   `src/ocean/ocean.js`, `cascadesFor()` (bands) and `computeStats()` (foam threshold stats).
 - Ocean (`src/three/ocean.ts`, M1): open-water's spectrum, evolve, Stockham FFT and assemble as TSL compute over
   f32 storage buffers indexed `y * N + x`. One ComputeNode per cascade, FFT stage and ping-pong direction, all
-  uniforms set before the frame's one `renderer.compute([...])`. Not drawn yet; `window.oceanTest` drives it.
+  uniforms set before the frame's one `renderer.compute([...])`. Not drawn yet; `window.portTest` drives it.
 
 ## Checks
 

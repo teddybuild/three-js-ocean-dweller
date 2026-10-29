@@ -17,7 +17,7 @@ export interface Engine {
 }
 
 declare global {
-  interface Window { engine?: Engine; app?: any; oceanTest?: any }
+  interface Window { engine?: Engine; app?: any; portTest?: any }
 }
 
 if (new URLSearchParams(location.search).get('engine') === 'three') {

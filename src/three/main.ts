@@ -5,6 +5,7 @@ import { pass, color, uniform } from 'three/tsl';
 import { bloom } from 'three/addons/tsl/display/BloomNode.js';
 import type { Engine } from '../boot';
 import { OceanCompute } from './ocean';
+import { AtmosphereCompute } from './atmosphere';
 
 const params = new URLSearchParams(location.search);
 const RENDER_MODE = params.has('render');
@@ -102,12 +103,20 @@ async function start() {
   };
   window.engine = engine;
 
-  // the FFT ocean (milestone 1), not drawn yet; tools/fft-diff.mjs drives it through window.oceanTest. FFT sizes
+  // the FFT ocean (milestone 1), not drawn yet; tools/fft-diff.mjs drives it through window.portTest. FFT sizes
   // follow src/main.js: ?q, else 'high' in ?render and 'rt' live.
   const q = params.get('q') || (RENDER_MODE ? 'high' : 'rt');
   const ocean = new OceanCompute(renderer, q === 'rt' ? [256, 256, 128, 128] : [512, 256, 256, 256]);
-  window.oceanTest = {
+  const atmo = new AtmosphereCompute(renderer);
+  window.portTest = {
     ocean,
+    atmo,
+    // a half-float storage texture as a Float32Array, rows in texel order (y = 0 first)
+    async readTexture(tex: THREE.Texture) {
+      const { width: w, height: h } = tex.image as { width: number; height: number };
+      const raw = await backend.copyTextureToBuffer(tex, 0, 0, w, h);
+      return Float32Array.from(new (globalThis as any).Float16Array(raw.buffer, raw.byteOffset, w * h * 4));
+    },
     // runs fn inside the same error scopes as a frame; errors land in engine.errors
     async scoped<T>(fn: () => Promise<T>) {
       for (const s of scopes) device.pushErrorScope(s);
