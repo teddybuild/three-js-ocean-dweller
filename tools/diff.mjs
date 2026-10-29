@@ -20,12 +20,17 @@ const SCENES = {
   // milestone 5: a downpour with spray (rain streaks, splashes, fog), a storm with a forced ground strike at t 2.9
   rain: 'preset=rain&rain=0.8&wind=20&float=0',
   storm: 'preset=storm&float=0&strikeAt=2.9',
+  // night under the moon (sun 12 deg below the horizon), and the storm with the camera riding the waves (the probe)
+  night: 'preset=breeze&float=0&elev=-12',
+  stormfloat: 'preset=storm&strikeAt=2.9',
+  // the live quality tier: 256/256/128/128 FFT, half-resolution checkerboarded clouds, bicubic upsample
+  rt: 'preset=breeze&float=0&q=rt',
 };
 // fraction of rows from the top that the metrics cover: at pitch 10 and fov 42 the horizon is at 73 %
 const CROP = { clear: 0.68 };
-// PSNR floors of ported scenes: below it the run fails (2026-10-29: clear sky 48.5 dB, sea 33.4 dB, breeze 33.9 dB,
-// squall 42.0 dB, rain 43.1 dB, storm 41.2 dB)
-const MIN_PSNR = { clear: 38, sea: 30, breeze: 30, squall: 35, rain: 35, storm: 35 };
+// PSNR floors of ported scenes: below it the run fails (2026-10-29 with MSAA: clear 49.8, sea 37.3, breeze 37.3, calm
+// 47.9, squall 45.9, rain 43.5, storm 43.2, night 41.9, stormfloat 41.5, rt 37.3 dB)
+const MIN_PSNR = { clear: 38, sea: 30, breeze: 30, calm: 38, squall: 35, rain: 35, storm: 35, night: 35, stormfloat: 35, rt: 30 };
 const W = 1280, H = 720, WARM = 3, DT = 1 / 30, FRAMES = Math.round(WARM / DT);
 // GL names the device; WebGPU redacts it to vendor + architecture, which on this one-GPU box is the 5080
 const EXPECT = { vendor: /nvidia/i, device: process.env.EXPECT_GPU || 'RTX 5080', architecture: process.env.EXPECT_GPU_ARCH || 'blackwell' };

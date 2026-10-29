@@ -44,8 +44,11 @@ How the port is built and checked. Decision: `docs/adr/0001-three-webgpu-port.md
 - Weather effects (`src/three/rain.ts`, `spray.ts`, `lightning.ts`, M5): instanced quads in NodeMaterials drawn
   after the water (renderOrder 1-4: bolt, spray, splashes, streaks) with GL's blend factors; the vertex shaders
   output clip space. Seeds and the lightning CPU model (rng(7), trigger, buildBolt, update) are GL's, so both engines
-  strike at the same place and time (`?strikeAt=t`). Not ported: thunder audio (`lightning.events` is dropped),
-  MSAA (and with it GL's `centroid` interpolation).
+  strike at the same place and time (`?strikeAt=t`). Their `vUv` (and the bolt's `vClip`) use
+  `centroidVarying` (`tsl-util.ts`), GL's `centroid`: three's `varyingProperty` takes no interpolation, so the helper
+  sets it on the builder's varying, which WGSL emits as `@interpolate(perspective, centroid)`.
+- Audio (`src/three/main.ts` `audio`): GL's live `audio` object around the shared `src/audio/audio.js`, fed
+  `lightning.events` for thunder. No UI here: the first click or key starts the AudioContext, M mutes.
 
 ## Checks
 
@@ -55,7 +58,10 @@ How the port is built and checked. Decision: `docs/adr/0001-three-webgpu-port.md
   capture that is not 1280x720 or is one colour, a frame count or NodeFrame count other than 90, a GL renderer that
   is not the RTX 5080 (`EXPECT_GPU`), a WebGPU adapter that is not nvidia/blackwell (`EXPECT_GPU_ARCH`) or is a
   fallback. Low PSNR is progress, not failure. `--self-test` runs 18 synthetic known-bad cases and 3 live ones.
-  Scenes: `breeze`, `calm`, `squall`, or any raw query string.
+  Scenes: the `SCENES` table (incl. `night` at elev -12, `stormfloat` with the floating camera, `rt` the live tier),
+  or any raw query string.
+- `node tools/live-three.mjs`: the live path (no `?render`, q=rt, rAF loop) for 6 s in a storm with a strike at 2 s;
+  fails on errors, under 5 fps, a stopped AudioContext, or no thunder.
 - `node tools/fft-diff.mjs [--self-test]`: the bare FFT at 128/256/512 against a CPU DFT (impulse, single mode,
   noise), then every cascade's h0, disp, foam, slope and active buffers against a fresh GL `Ocean` after 3 steps of
   the breeze spectrum. Limits are relative RMS: 1e-5 for f32 against f32, 2e-3 (5e-3 foam) against GL's f16 targets.
@@ -78,7 +84,7 @@ Fill one row per GPU resource as it is ported. The GL column comes from the 2026
 
 | Resource | GL (src/) | three | Owner | Notes |
 |---|---|---|---|---|
-| HDR scene | MSTarget rgba16f/r11g11b10f, MSAA, blit resolve | half-float RenderTarget, no MSAA yet | `src/three/main.ts` | M2 |
+| HDR scene | MSTarget rgba16f/r11g11b10f, MSAA, blit resolve | half-float RenderTarget, 4x MSAA (`?msaa`), resolved by the pass | `src/three/main.ts` | M2 |
 | Tone map | AgX in `src/fx/post.js` | same AgX + look in TSL | `src/three/post.ts` | M2 |
 | Noise, h0 | rgba32f per cascade | vec4 f32 buffer per cascade | `src/three/ocean.ts` | M1; rng(1337), same draw order |
 | FFT ping-pong | 2 MRT pairs rgba32f per size | 2 x 2 vec4 buffers per size | `src/three/ocean.ts` | M1; shared by cascades of one size, result in A |

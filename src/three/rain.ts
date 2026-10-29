@@ -8,6 +8,7 @@
 import * as THREE from 'three/webgpu';
 import * as TSL from 'three/tsl';
 import { atmoU } from './atmosphere';
+import { centroidVarying } from './tsl-util';
 import type { SkyCompute } from './sky';
 import { rng } from '../math.js';
 
@@ -128,13 +129,13 @@ export class Rain {
 
     const ms = fxMaterial('rain.splash', THREE.OneFactor, THREE.OneMinusSrcAlphaFactor);
     {
-      const vUv = varyingProperty('vec2', 'vUv'), vAlpha = varyingProperty('float', 'vAlpha'), vJet = varyingProperty('float', 'vJet');
+      const vUv = centroidVarying('vec2', 'vUv'), vAlpha = varyingProperty('float', 'vAlpha'), vJet = varyingProperty('float', 'vJet');
       ms.vertexNode = this.splashVertex(inputs, vUv, vAlpha, vJet);
       ms.fragmentNode = this.splashFragment(sky, vUv, vAlpha, vJet);
     }
     const mt = fxMaterial('rain.streak', THREE.OneFactor, THREE.OneMinusSrcAlphaFactor);
     {
-      const vUv = varyingProperty('vec2', 'vUv'), vAlpha = varyingProperty('float', 'vAlpha');
+      const vUv = centroidVarying('vec2', 'vUv'), vAlpha = varyingProperty('float', 'vAlpha');
       const vDir = varyingProperty('vec3', 'vDir');
       mt.vertexNode = this.streakVertex(vUv, vAlpha, vDir);
       mt.fragmentNode = this.streakFragment(sky, vUv, vAlpha, vDir);

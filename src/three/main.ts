@@ -16,6 +16,7 @@ import { Spray } from './spray';
 import { Lightning } from './lightning';
 import { atmoU } from './atmosphere';
 import { Weather } from '../weather.js';
+import { AudioEngine } from '../audio/audio.js';
 import { smoothstep } from '../math.js';
 
 const params = new URLSearchParams(location.search);
@@ -30,6 +31,33 @@ export const uTime = uniform(elapsed);
 function fail(msg: string): never {
   throw new Error(msg);
 }
+
+// Live audio, as src/main.js `audio`: wind, rain and sea from the weather, thunder from lightning.events. Browsers
+// block autoplay, so the context is made on the first gesture; ?render never makes one.
+const audio = {
+  engine: new AudioEngine(),
+  ctx: null as AudioContext | null,
+  async enable(on: boolean) {
+    if (on && !this.ctx) {
+      this.ctx = new AudioContext({ latencyHint: 'playback' });
+      await this.engine.init(this.ctx);
+    }
+    if (this.ctx) await (on ? this.ctx.resume() : this.ctx.suspend());
+  },
+  update(S: any, hs: number) {
+    if (!this.ctx) return;
+    this.engine.set({
+      wind: S.wind, rain: S.rain, hs,
+      tp: (2 * Math.PI * Math.max(S.wind, 1)) / (0.855 * 9.81),
+      foam: Math.min(2 * 3.84e-6 * Math.pow(S.wind, 3.41), 0.4),
+    });
+    this.engine.tick();
+  },
+  // a muted (suspended) context drops thunder instead of queueing it for the unmute
+  thunder(events: { dist: number; power: number }[]) {
+    if (this.ctx?.state === 'running') for (const ev of events) this.engine.thunder(this.ctx.currentTime, ev.dist, ev.power);
+  },
+};
 
 async function start() {
   if (!navigator.gpu || !(await navigator.gpu.requestAdapter())) fail('WebGPU is not available in this browser');
@@ -161,7 +189,7 @@ async function start() {
       lightning.trigger(lcam, { dist: Number(params.get('sdist') || 3500), az: cam.yaw + Number(params.get('saz') || 0.15), ground: true, base: S.cloudBase });
     }
     const flash = lightning.update(dt, S.lightning, lcam, S.cloudBase);
-    lightning.events.splice(0); // thunder: the audio is not ported
+    audio.thunder(lightning.events.splice(0));
     const lp = lightning.pos;
     const ldist = Math.hypot(lp[0] - cp.x, lp[2] - cp.z);
     // illuminance of a stroke ~ I / d^2 with I ~ 1e8 cd, relative to the light source (sun ~1e5 lux, moon ~0.25)
@@ -283,9 +311,10 @@ async function start() {
   scene.backgroundNode = Fn(() => sky.backgroundWithClouds(positionWorldDirection, vec2(screenUV.x, screenUV.y.oneMinus()), cameraPosition))();
   scene.add(water.mesh, lightning.mesh, spray.mesh, rain.mesh);
 
-  // the HDR scene (half float, as GL's rgba16f target; no MSAA yet), then open-water's post chain to the canvas.
+  // the HDR scene (half float, as GL's rgba16f target, 4x MSAA resolved at the end of the pass as GL's blit, ?msaa
+  // overrides), then open-water's post chain to the canvas.
   // Incident metering: an 18 % grey card under the sun (through the clouds over the camera) and sky
-  const hdr = new THREE.RenderTarget(1, 1, { type: THREE.HalfFloatType });
+  const hdr = new THREE.RenderTarget(1, 1, { type: THREE.HalfFloatType, samples: Number(params.get('msaa') || 4) });
   const vis = (texture as any)(clouds.shadow, (vec2 as any)(0.5)).level(0).r;
   const post = new PostChain(renderer, { incidentE: sky.sunIlluminance().mul(vis).mul(max(atmoU.sun.y, 0)).add(sky.skyIrradiance()) });
   const resize = () => {
@@ -307,6 +336,7 @@ async function start() {
     if (RENDER_MODE) { internals.info.reset(); internals._nodes.nodeFrame.update(); }
     for (const s of scopes) device.pushErrorScope(s);
     const postOpts = await updateWorld(dt);
+    audio.update(weather.state, ocean.stats.hs);
     renderer.setRenderTarget(hdr);
     renderer.render(scene, camera);
     renderer.setRenderTarget(null);
@@ -334,6 +364,7 @@ async function start() {
   window.engine = engine;
 
   window.portTest = {
+    audio,
     ocean,
     atmo,
     sky,
@@ -370,6 +401,8 @@ async function start() {
     },
   };
   if (!RENDER_MODE) {
+    addEventListener('pointerdown', () => audio.enable(true), { once: true });
+    addEventListener('keydown', (e) => audio.enable(e.key === 'm' ? audio.ctx?.state !== 'running' : true));
     let last = performance.now();
     renderer.setAnimationLoop((now: number) => { frame(Math.min((now - last) / 1000, 0.1)); last = now; });
   }

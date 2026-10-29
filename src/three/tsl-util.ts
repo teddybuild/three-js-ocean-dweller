@@ -22,3 +22,15 @@ const anyOf = (test: (x: Node) => Node) => (v: Node, n = 3) => {
 export const anyNan = anyOf(isNan);
 export const anyInf = anyOf(isInf);
 export const anyNonFinite = anyOf(isNonFinite);
+
+// a varyingProperty interpolated at the centroid, as GLSL `centroid out/in`: with MSAA an edge pixel's samples then
+// read the varying inside the triangle instead of extrapolating past it (thin rain streaks, spray, the bolt)
+export function centroidVarying(type: string, name: string): Node {
+  const node = (TSL as any).varyingProperty(type, name);
+  const generate = node.generate.bind(node);
+  node.generate = (builder: any) => {
+    Object.assign(builder.getVaryingFromNode(node, name), { interpolationType: 'perspective', interpolationSampling: 'centroid' });
+    return generate(builder);
+  };
+  return node;
+}

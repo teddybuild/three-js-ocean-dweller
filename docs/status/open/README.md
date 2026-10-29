@@ -5,8 +5,8 @@ over this page. New item: a file here plus a line below. Finished: delete its fi
 
 ## Open
 
-1. three.js WebGPU port - parity next: MSAA (GL 4x), thunder audio from `lightning.events`, the live `rt` path
-   (checkerboard + bicubic upsample, never diffed), upstream sky edge at x ~300 in rain/storm; `docs/systems/three-port.md`.
+1. three.js WebGPU port - parity left: upstream sky edge at x ~300 in rain/storm (both engines);
+   `docs/systems/three-port.md`.
 2. End-of-port review (ruling 2026-10-29): Codex + agy on the whole port. Carry-overs: three's own error scopes are
    not awaited before capture (Codex M0 review 3, test with a real broken compute shader in M1); Codex M0 review 4
    (`tmp/m0-codex4.log`, run before the rule changed).

@@ -5,6 +5,7 @@
 import * as THREE from 'three/webgpu';
 import * as TSL from 'three/tsl';
 import { atmoU } from './atmosphere';
+import { centroidVarying } from './tsl-util';
 import type { SkyCompute } from './sky';
 import { quadGeometry, seedAttribute, fxMaterial, fxMesh, clipOf, OFFSCREEN, h1, setV2, setV3, type Vec2In, type Vec3In } from './rain';
 
@@ -44,7 +45,7 @@ export class Spray {
     this.geo = quadGeometry();
     this.geo.setAttribute('aSeed', seedAttribute(count, 41));
     const m = fxMaterial('spray', THREE.OneFactor, THREE.OneMinusSrcAlphaFactor);
-    const vUv = varyingProperty('vec2', 'vUv'), vAlpha = varyingProperty('float', 'vAlpha'), vAlong = varyingProperty('float', 'vAlong');
+    const vUv = centroidVarying('vec2', 'vUv'), vAlpha = varyingProperty('float', 'vAlpha'), vAlong = varyingProperty('float', 'vAlong');
     m.vertexNode = this.vertex(inputs, vUv, vAlpha, vAlong);
     m.fragmentNode = this.fragment(sky, vUv, vAlpha, vAlong);
     this.mesh = fxMesh(this.geo, m, 'spray', 2);

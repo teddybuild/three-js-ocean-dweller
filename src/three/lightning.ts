@@ -5,6 +5,7 @@
 import * as THREE from 'three/webgpu';
 import * as TSL from 'three/tsl';
 import { rng } from '../math.js';
+import { centroidVarying } from './tsl-util';
 import { quadGeometry, fxMaterial, fxMesh, clipOf, setV3, type Vec3In } from './rain';
 
 type Node = any; // @types/three's TSL overloads reject long node chains, so nodes and TSL functions are untyped
@@ -53,7 +54,7 @@ export class Lightning {
     this.geo = quadGeometry();
     this.grow(16384); // a ground strike is ~6k segments (median), rarely over 15k
     const m = fxMaterial('lightning', THREE.OneFactor, THREE.OneFactor);
-    const vUv = varyingProperty('vec2', 'vUv'), vI = varyingProperty('float', 'vI'), vClip = varyingProperty('float', 'vClip');
+    const vUv = centroidVarying('vec2', 'vUv'), vI = varyingProperty('float', 'vI'), vClip = centroidVarying('float', 'vClip');
     m.vertexNode = this.vertex(vUv, vI, vClip);
     m.fragmentNode = this.fragment(vUv, vI, vClip);
     this.mesh = fxMesh(this.geo, m, 'lightning', 1);
