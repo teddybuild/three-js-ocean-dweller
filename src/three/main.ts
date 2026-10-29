@@ -81,6 +81,10 @@ async function start() {
     if (type === 'error') errors.push([message, ...rest].map(String).join(' '));
     console[type](message, ...rest);
   });
+  // every popErrorScope promise, three's own pipeline scopes included, so settle() waits for their error reports
+  // (the extra .then hop lets the caller's own handler push the error before Promise.all sees the scope settle)
+  const pop = device.popErrorScope.bind(device);
+  device.popErrorScope = () => { const p = pop(); if (RENDER_MODE) pending.push(p.then(() => {})); return p; };
   const ai = device.adapterInfo as GPUAdapterInfo & { isFallbackAdapter?: boolean };
   const scopes: GPUErrorFilter[] = ['validation', 'out-of-memory', 'internal'];
 
@@ -114,7 +118,7 @@ async function start() {
   const foam = new FoamTextureCompute(renderer);
   const clouds = new CloudsCompute(renderer, sky);
   const windOffset = [Number(params.get('cx') || 0), 0, Number(params.get('cz') || 0)];
-  let prevFrontDist: number | undefined;
+  let prevFrontDist: number | undefined, wasNight: boolean | undefined;
   const water = new WaterMesh({ ...ocean.textures(), env: sky.env, sky, foamTex: foam.tex, shadow: clouds.shadow, shadowRect: clouds.shadowRect }, { angular: q === 'rt' ? 400 : 640 });
   const gustDrift = [0, 0];
   const probe = new OceanProbe(renderer, ocean.textures());
@@ -160,6 +164,9 @@ async function start() {
     await updateCamera(dt);
     const night = weather.time.sunElev < -7;
     const sun = night ? weather.moonDir() : weather.sunDir();
+    // the light source switched (sun <-> moon): temporal cloud history is meaningless now (as src/main.js)
+    if (wasNight !== undefined && wasNight !== night) clouds.reset = true;
+    wasNight = night;
     atmoU.lightMag.value = night ? -12.7 : -26.74;
     atmo.update(sun, camera.position.y, S.haze);
     // squall front: world-space line ahead of the camera; weather blends across it
@@ -342,10 +349,8 @@ async function start() {
     renderer.setRenderTarget(null);
     post.render(hdr.texture, dt, postOpts);
     engine.frames++;
-    for (let i = 0; i < scopes.length; i++) {
-      const popped = device.popErrorScope().then((e) => { if (e) errors.push(e.message); });
-      if (RENDER_MODE) pending.push(popped);  // (the live loop never settles, so it keeps no list)
-    }
+    // (popErrorScope adds each to `pending` in ?render; the live loop never settles, so it keeps no list)
+    for (let i = 0; i < scopes.length; i++) device.popErrorScope().then((e) => { if (e) errors.push(e.message); });
   };
   const settle = async () => {
     await device.queue.onSubmittedWorkDone();
@@ -365,6 +370,7 @@ async function start() {
 
   window.portTest = {
     audio,
+    device,
     ocean,
     atmo,
     sky,
@@ -396,15 +402,25 @@ async function start() {
     async scoped<T>(fn: () => Promise<T>) {
       for (const s of scopes) device.pushErrorScope(s);
       const out = await fn();
-      for (let i = 0; i < scopes.length; i++) { const e = await device.popErrorScope(); if (e) errors.push(e.message); }
+      for (let i = 0; i < scopes.length; i++) device.popErrorScope().then((e) => { if (e) errors.push(e.message); });
+      await settle();
       return out;
     },
   };
   if (!RENDER_MODE) {
-    addEventListener('pointerdown', () => audio.enable(true), { once: true });
-    addEventListener('keydown', (e) => audio.enable(e.key === 'm' ? audio.ctx?.state !== 'running' : true));
+    addEventListener('pointerdown', () => { if (!audio.ctx) audio.enable(true); });
+    addEventListener('keydown', (e) => {
+      if (e.key.toLowerCase() === 'm') audio.enable(audio.ctx?.state !== 'running');
+      else if (!audio.ctx) audio.enable(true);
+    });
     let last = performance.now();
-    renderer.setAnimationLoop((now: number) => { frame(Math.min((now - last) / 1000, 0.1)); last = now; });
+    let busy = false;
+    renderer.setAnimationLoop(async (now: number) => {
+      if (busy) return;
+      busy = true;
+      try { await frame(Math.min((now - last) / 1000, 0.1)); } finally { busy = false; }
+      last = now;
+    });
   }
 }
 

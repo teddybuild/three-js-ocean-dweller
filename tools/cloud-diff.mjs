@@ -57,9 +57,10 @@ try {
       return enc(out);
     };
     const out = slices.map((s) => read(tex[s.key], s.level, s.z));
-    return { out, glError: g.getError() };
+    return { out, glError: g.getError(), engineErrors: window.engine.errors };
   }, slices, B64, FRAMES, DT);
   if (ref.glError) failures.push(`gl error 0x${ref.glError.toString(16)}`);
+  failures.push(...ref.engineErrors.map((e) => `gl ${e}`));
   await gl.close();
 
   const three = await openApp(browser, `http://localhost:5173/?${QUERY}&engine=three`, { width: W, height: H });

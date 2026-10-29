@@ -204,6 +204,7 @@ export class CloudsCompute {
     this.tex = [halfTex(nw, nh), halfTex(nw, nh)];
     this.dtex = [halfTex(nw, nh), halfTex(nw, nh)];
     this.sU.size.value.set(nw, nh);
+    this.screenNodes.forEach((n) => n.dispose()); // drops the old size's compute pipelines
     this.screenNodes = [0, 1].map((i) => this.screenKernel(i));
     this.cur = 0;
     this.reset = true;

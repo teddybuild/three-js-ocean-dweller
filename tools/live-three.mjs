@@ -12,12 +12,13 @@ try {
   await page.mouse.click(640, 360);
   const f0 = await page.evaluate(() => engine.frames);
   await new Promise((r) => setTimeout(r, 6000));
-  const r = await page.evaluate(() => ({ frames: engine.frames, errors: engine.errors, ctx: portTest.audio.ctx?.state, thunders }));
+  const r = await page.evaluate(() => ({ frames: engine.frames, errors: engine.errors, ctx: portTest.audio.ctx?.state, thunders, buffers: Object.keys(portTest.audio.engine.buffers).filter((k) => k.startsWith('thunder')).length }));
   const fps = (r.frames - f0) / 6;
-  console.log(JSON.stringify({ fps: +fps.toFixed(1), audio: r.ctx, thunders: r.thunders, errors: r.errors.length }));
+  console.log(JSON.stringify({ fps: +fps.toFixed(1), audio: r.ctx, thunders: r.thunders, buffers: r.buffers, errors: r.errors.length }));
   if (fps < 5) failures.push(`loop stalled: ${fps.toFixed(1)} fps`);
   if (r.ctx !== 'running') failures.push(`audio context ${r.ctx}`);
   if (r.thunders < 1) failures.push('no thunder from the forced strike');
+  if (r.buffers < 1) failures.push('no thunder recording decoded: thunder() returns silently');
   failures.push(...r.errors, ...page.collectedErrors);
 } finally {
   await browser.close();

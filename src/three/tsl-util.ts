@@ -32,5 +32,8 @@ export function centroidVarying(type: string, name: string): Node {
     Object.assign(builder.getVaryingFromNode(node, name), { interpolationType: 'perspective', interpolationSampling: 'centroid' });
     return generate(builder);
   };
+  // PropertyNode's key hashes type, name and varying only: keep a centroid program apart from a plain one
+  const key = node.customCacheKey.bind(node);
+  node.customCacheKey = () => key() + 1;
   return node;
 }
