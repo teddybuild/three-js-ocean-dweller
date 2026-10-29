@@ -9,6 +9,7 @@ grouped by topic, merged, never appended blindly. A lesson that can be a check b
 - Chrome headless on Linux drops the first WebGL context once (~250 ms, Vulkan compositor surface fails): `launch()` burns it on a warm-up page. A blank reference capture passed the old diff with exit 0.
 - three's NodeFrame only advances in its own rAF loop: fixed steps must stop `renderer._animation` and call `_nodes.nodeFrame.update()` per frame, or passes update once per capture.
 - three catches pipeline validation errors in its own error scopes and only logs them: read them via `THREE.setConsoleFunction`.
+- A 2D `drawImage` of the WebGPU canvas (also OffscreenCanvas) reads black in headless Chrome while `toDataURL` works: copy `getCurrentTexture()` (COPY_SRC) to a buffer in the frame's task (`app.pixels()`).
 - `git add a b <path already git rm'd>` aborts the whole add: the commit then holds only the staged rm. Check `git show --stat` before pushing.
 
 ## Porting to TSL/WGSL (Codex, agy, web-ocean-3d)
