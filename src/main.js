@@ -14,7 +14,7 @@ import { Spray } from './fx/spray.js';
 import { Weather } from './weather.js';
 import { Profiler } from './profiler.js';
 import { UI, UI_CSS } from './ui.js';
-import { AudioEngine } from './audio/audio.js';
+import { liveAudio as audio } from './audio/audio.js';
 import { film, filmAudio } from './film.js';
 
 const params = new URLSearchParams(location.search);
@@ -437,33 +437,6 @@ try {
   throw e;
 }
 
-// Live audio: created on the first user gesture (browsers block autoplay).
-const audio = {
-  engine: new AudioEngine(),
-  ctx: null,
-  async enable(on) {
-    if (on && !this.ctx) {
-      this.ctx = new AudioContext({ latencyHint: 'playback' });
-      await this.engine.init(this.ctx);
-    }
-    if (!this.ctx) return;
-    if (on) await this.ctx.resume(); else await this.ctx.suspend();
-  },
-  update(app) {
-    const e = this.engine;
-    if (!this.ctx) return;
-    const S = app.weather.state;
-    e.set({
-      wind: S.wind, rain: S.rain, hs: app.stats ? app.stats.hs : 2,
-      tp: (2 * Math.PI * Math.max(S.wind, 1)) / (0.855 * 9.81),
-      foam: Math.min(2 * 3.84e-6 * Math.pow(S.wind, 3.41), 0.4),
-    });
-    e.tick();
-    // muted (suspended) context: drop thunder instead of queueing it for the unmute
-    if (this.ctx.state === 'running') for (const ev of app.thunderEvents || []) e.thunder(this.ctx.currentTime, ev.dist, ev.power);
-  },
-};
-
 if (!RENDER_MODE) {
   const style = document.createElement('style');
   style.textContent = UI_CSS;
@@ -477,7 +450,7 @@ if (!RENDER_MODE) {
     const dt = Math.min((now - last) / 1000, 0.1);
     last = now;
     app.frame(dt);
-    audio.update(app);
+    audio.update(app.weather.state, app.stats ? app.stats.hs : 2, app.thunderEvents || []);
     avg += (dt - avg) * 0.05;
     if (!params.has('scale') && (settle += dt) > 2.5 && !document.hidden) {
       const next = avg > 1 / 26 ? Math.max(app.scale * 0.88, 0.5) : avg < 1 / 50 ? Math.min(app.scale * 1.08, maxScale) : app.scale;

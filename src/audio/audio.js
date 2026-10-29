@@ -250,3 +250,31 @@ export function encodeWav(buffer) {
   for (let i = 0; i < n; i++) for (let c = 0; c < ch; c++) { out.setInt16(o, clamp(data[c][i], -1, 1) * 32767, true); o += 2; }
   return out.buffer;
 }
+
+// Live audio for the app, shared by both engines: wind, rain and sea from the weather state, thunder from the
+// lightning events. Browsers block autoplay, so the context is made on the first enable (a user gesture).
+export const liveAudio = {
+  engine: new AudioEngine(),
+  ctx: null,
+  async enable(on) {
+    if (on && !this.ctx) {
+      this.ctx = new AudioContext({ latencyHint: 'playback' });
+      await this.engine.init(this.ctx);
+    }
+    if (!this.ctx) return;
+    if (on) await this.ctx.resume(); else await this.ctx.suspend();
+  },
+  // per frame: S the weather state, hs the significant wave height (m), events the frame's thunder events
+  update(S, hs, events) {
+    const e = this.engine;
+    if (!this.ctx) return;
+    e.set({
+      wind: S.wind, rain: S.rain, hs,
+      tp: (2 * Math.PI * Math.max(S.wind, 1)) / (0.855 * 9.81),
+      foam: Math.min(2 * 3.84e-6 * Math.pow(S.wind, 3.41), 0.4),
+    });
+    e.tick();
+    // muted (suspended) context: drop thunder instead of queueing it for the unmute
+    if (this.ctx.state === 'running') for (const ev of events) e.thunder(this.ctx.currentTime, ev.dist, ev.power);
+  },
+};

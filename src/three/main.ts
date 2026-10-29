@@ -16,7 +16,7 @@ import { Spray } from './spray';
 import { Lightning } from './lightning';
 import { atmoU } from './atmosphere';
 import { Weather } from '../weather.js';
-import { AudioEngine } from '../audio/audio.js';
+import { liveAudio as audio } from '../audio/audio.js';
 import { UI, UI_CSS } from '../ui.js';
 import { film, filmAudio } from '../film.js';
 import { smoothstep, clamp } from '../math.js';
@@ -33,33 +33,6 @@ export const uTime = uniform(elapsed);
 function fail(msg: string): never {
   throw new Error(msg);
 }
-
-// Live audio, as src/main.js `audio`: wind, rain and sea from the weather, thunder from lightning.events. Browsers
-// block autoplay, so the context is made on the first gesture; ?render never makes one.
-const audio = {
-  engine: new AudioEngine(),
-  ctx: null as AudioContext | null,
-  async enable(on: boolean) {
-    if (on && !this.ctx) {
-      this.ctx = new AudioContext({ latencyHint: 'playback' });
-      await this.engine.init(this.ctx);
-    }
-    if (this.ctx) await (on ? this.ctx.resume() : this.ctx.suspend());
-  },
-  update(S: any, hs: number) {
-    if (!this.ctx) return;
-    this.engine.set({
-      wind: S.wind, rain: S.rain, hs,
-      tp: (2 * Math.PI * Math.max(S.wind, 1)) / (0.855 * 9.81),
-      foam: Math.min(2 * 3.84e-6 * Math.pow(S.wind, 3.41), 0.4),
-    });
-    this.engine.tick();
-  },
-  // a muted (suspended) context drops thunder instead of queueing it for the unmute
-  thunder(events: { dist: number; power: number }[]) {
-    if (this.ctx?.state === 'running') for (const ev of events) this.engine.thunder(this.ctx.currentTime, ev.dist, ev.power);
-  },
-};
 
 async function start() {
   if (!navigator.gpu || !(await navigator.gpu.requestAdapter())) fail('WebGPU is not available in this browser');
@@ -122,7 +95,7 @@ async function start() {
   const foam = new FoamTextureCompute(renderer);
   const clouds = new CloudsCompute(renderer, sky);
   const windOffset = [Number(params.get('cx') || 0), 0, Number(params.get('cz') || 0)];
-  let prevFrontDist: number | undefined, wasNight: boolean | undefined;
+  let prevFrontDist: number | undefined, wasNight: boolean | undefined, thunderEvents: { dist: number; power: number }[] = [];
   const water = new WaterMesh({ ...ocean.textures(), env: sky.env, sky, foamTex: foam.tex, shadow: clouds.shadow, shadowRect: clouds.shadowRect }, { angular: q === 'rt' ? 400 : 640 });
   const gustDrift = [0, 0];
   const probe = new OceanProbe(renderer, ocean.textures());
@@ -208,7 +181,7 @@ async function start() {
       lightning.trigger(lcam, { dist: Number(params.get('sdist') || 3500), az: cam.yaw + Number(params.get('saz') || 0.15), ground: true, base: S.cloudBase });
     }
     const flash = lightning.update(dt, S.lightning, lcam, S.cloudBase);
-    audio.thunder(lightning.events.splice(0));
+    thunderEvents = lightning.events.splice(0);
     const lp = lightning.pos;
     const ldist = Math.hypot(lp[0] - cp.x, lp[2] - cp.z);
     // illuminance of a stroke ~ I / d^2 with I ~ 1e8 cd, relative to the light source (sun ~1e5 lux, moon ~0.25)
@@ -356,7 +329,7 @@ async function start() {
     if (RENDER_MODE) { internals.info.reset(); internals._nodes.nodeFrame.update(); }
     for (const s of scopes) device.pushErrorScope(s);
     const postOpts = await updateWorld(dt);
-    audio.update(weather.state, ocean.stats.hs);
+    audio.update(weather.state, ocean.stats.hs, thunderEvents);
     renderer.setRenderTarget(hdr);
     renderer.render(scene, camera);
     renderer.setRenderTarget(null);
