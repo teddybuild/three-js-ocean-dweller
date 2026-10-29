@@ -1,13 +1,18 @@
-// three.js WebGPU port of open-water. Milestone 0: renderer, camera and post chain only; the scene is a
+// three.js WebGPU port of open-water. Milestone 0: renderer, clock, camera and post chain only; the scene is a
 // placeholder until the FFT, sky and water land. WebGPU only: three's WebGL2 fallback is refused.
 import * as THREE from 'three/webgpu';
-import { pass, color } from 'three/tsl';
+import { pass, color, uniform } from 'three/tsl';
 import { bloom } from 'three/addons/tsl/display/BloomNode.js';
 import type { Engine } from '../boot';
 
 const params = new URLSearchParams(location.search);
 const RENDER_MODE = params.has('render');
 const canvas = document.getElementById('c') as HTMLCanvasElement;
+
+// The engine's own clock. Every animated node reads uTime; three's `time` node and NodeFrame are never used,
+// because they follow the wall clock, not the fixed steps of a capture.
+let elapsed = Number(params.get('t') || 0);
+export const uTime = uniform(elapsed);
 
 function fail(msg: string): never {
   document.body.insertAdjacentHTML('beforeend', `<pre class="err">${msg}</pre>`);
@@ -21,26 +26,35 @@ async function start() {
   const backend = renderer.backend as any;
   if (!backend.isWebGPUBackend) fail('three fell back to WebGL2; this port needs WebGPU');
   const device: GPUDevice = backend.device;
+
+  // WebGPU errors: uncaptured ones, a validation scope per frame, and the ones three catches in its own error
+  // scopes and only logs (pipeline creation), via its console hook
   const errors: string[] = [];
+  const pending: Promise<void>[] = [];
   device.addEventListener('uncapturederror', (e) => errors.push((e as GPUUncapturedErrorEvent).error.message));
   device.lost.then((info) => errors.push(`device lost: ${info.message}`));
-  const ai = device.adapterInfo;
+  THREE.setConsoleFunction((type: 'log' | 'warn' | 'error', message: string, ...rest: unknown[]) => {
+    if (type === 'error') errors.push([message, ...rest].map(String).join(' '));
+    console[type](message, ...rest);
+  });
+  const ai = device.adapterInfo as GPUAdapterInfo & { isFallbackAdapter?: boolean };
 
   renderer.setPixelRatio(RENDER_MODE ? 1 : Math.min(window.devicePixelRatio || 1, 1.5));
   renderer.setSize(window.innerWidth, window.innerHeight, false);
   renderer.toneMapping = THREE.AgXToneMapping;
 
-  // camera: same URL keys and defaults as src/main.js (yaw/pitch in degrees, h in metres, vertical fov)
+  // camera: same URL keys, defaults and clip planes as src/main.js (eye height h, yaw/pitch in degrees, vertical
+  // fov). The GL camera rides the waves unless ?float=0; this one is still until the probe is ported.
   const yaw = (Number(params.get('yaw') || 200) * Math.PI) / 180;
   const pitch = (Number(params.get('pitch') ?? 1.5) * Math.PI) / 180;
-  const camera = new THREE.PerspectiveCamera(Number(params.get('fov') || 42), window.innerWidth / window.innerHeight, 0.1, 200000);
-  camera.position.set(0, Number(params.get('h') || 4), 0);
+  const camera = new THREE.PerspectiveCamera(Number(params.get('fov') || 42), window.innerWidth / window.innerHeight, 0.2, 80000);
+  camera.position.set(0, Number(params.get('h') || 3), 0);
   camera.lookAt(camera.position.clone().add(new THREE.Vector3(Math.cos(pitch) * Math.cos(yaw), Math.sin(pitch), Math.cos(pitch) * Math.sin(yaw))));
 
   // placeholder scene: flat sky colour and a flat sea
   const scene = new THREE.Scene();
   scene.backgroundNode = color(0x8fb4d8);
-  const sea = new THREE.Mesh(new THREE.PlaneGeometry(400000, 400000), new THREE.MeshBasicNodeMaterial({ color: 0x1b3550 }));
+  const sea = new THREE.Mesh(new THREE.PlaneGeometry(160000, 160000), new THREE.MeshBasicNodeMaterial({ color: 0x1b3550 }));
   sea.rotation.x = -Math.PI / 2;
   scene.add(sea);
 
@@ -54,17 +68,31 @@ async function start() {
     camera.updateProjectionMatrix();
   });
 
-  const frame = () => pipeline.render();
+  const frame = (dt: number) => {
+    elapsed += dt;
+    uTime.value = elapsed;
+    device.pushErrorScope('validation');
+    pipeline.render();
+    const popped = device.popErrorScope().then((e) => { if (e) errors.push(e.message); });
+    if (RENDER_MODE) pending.push(popped);  // (the live loop never settles, so it keeps no list)
+  };
+  const settle = async () => {
+    await device.queue.onSubmittedWorkDone();
+    await Promise.all(pending.splice(0));
+  };
   const engine: Engine = {
     name: 'three',
-    async step(n) { for (let i = 0; i < n; i++) frame(); await device.queue.onSubmittedWorkDone(); },
+    async step(n, dt) { for (let i = 0; i < n; i++) frame(dt); await settle(); },
     // render and read in the same task: the WebGPU canvas texture is only valid until the task ends
-    capture() { frame(); return canvas.toDataURL('image/png'); },
+    async capture() { frame(0); const png = canvas.toDataURL('image/png'); await settle(); return png; },
     errors,
-    adapter: `${ai.vendor} ${ai.architecture} ${ai.description}`.trim(),
+    adapter: { vendor: ai.vendor, architecture: ai.architecture, description: ai.description, fallback: ai.isFallbackAdapter ?? false },
   };
   window.engine = engine;
-  if (!RENDER_MODE) renderer.setAnimationLoop(frame);
+  if (!RENDER_MODE) {
+    let last = performance.now();
+    renderer.setAnimationLoop((now: number) => { frame(Math.min((now - last) / 1000, 0.1)); last = now; });
+  }
 }
 
 start();

@@ -1,13 +1,16 @@
 // Picks the renderer: ?engine=three is the three.js WebGPU port (docs/systems/three-port.md),
 // anything else the open-water WebGL2 reference in src/main.js.
-// Both expose window.engine for tools/diff.mjs: step(n, dt) runs n fixed steps, capture() returns a PNG data URL.
+// Both expose window.engine for tools/diff.mjs: step(n, dt) runs n fixed steps of the engine's own clock and awaits
+// the GPU; capture() renders once and returns a PNG data URL. A fresh page is the reset; seeds are fixed in code.
+
+export interface AdapterInfo { vendor: string; architecture: string; description: string; fallback: boolean }
 
 export interface Engine {
   name: 'gl' | 'three';
   step(n: number, dt: number): Promise<void>;
-  capture(): string;
+  capture(): Promise<string>;
   errors: string[];
-  adapter: string;
+  adapter: AdapterInfo;
 }
 
 declare global {
@@ -25,9 +28,9 @@ if (new URLSearchParams(location.search).get('engine') === 'three') {
     window.engine = {
       name: 'gl',
       async step(n, dt) { for (let i = 0; i < n; i++) app.frame(dt); gl.finish(); },
-      capture: () => app.canvas.toDataURL('image/png'),
+      async capture() { return app.canvas.toDataURL('image/png'); },
       errors: [],
-      adapter: dbg ? gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL) : '?',
+      adapter: { vendor: dbg ? gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL) : '?', architecture: '', description: 'WebGL2', fallback: false },
     };
   });
 }
