@@ -21,4 +21,5 @@ grouped by topic, merged, never appended blindly. A lesson that can be a check b
 - `?render` selects quality `high`: FFT sizes 512/256/256/256, not 256/256/128/128.
 - Test the FFT butterfly on the CPU against an O(N^2) DFT with a stage-0 sign check; a magnitude-only check missed web-ocean-3d's twiddle bug.
 - `new THREE.Vector4()` is (0, 0, 0, 1): a vec4 uniform whose w is a switch or intensity (flash, bolt) needs explicit zeros. It lit every near cloud with a phantom flash.
+- TSL and GLSL that read the same but render differently: dump the WGSL first (`renderer._nodes.getForCompute(node).computeShader`); six rounds of term bisection found the phantom flash that the WGSL showed at once.
 - Reversed-edge `smoothstep` is undefined: use `smoothstep(a, b, x).oneMinus()`. NDC from screen UV is `(2u-1, 1-2v)`. Use TSL `Loop`, not JS `for`.
