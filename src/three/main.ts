@@ -1,11 +1,15 @@
-// three.js WebGPU port of open-water. Milestone 0: renderer, clock, camera and post chain only; the scene is a
-// placeholder until the FFT, sky and water land. WebGPU only: three's WebGL2 fallback is refused.
+// three.js WebGPU port of open-water. Renderer, clock, camera, weather, atmosphere and the clear sky (M2); the sea
+// is a flat placeholder until the water lands (M3). WebGPU only: three's WebGL2 fallback is refused.
 import * as THREE from 'three/webgpu';
-import { pass, color, uniform } from 'three/tsl';
+import { pass, uniform, Fn, positionWorldDirection } from 'three/tsl';
 import { bloom } from 'three/addons/tsl/display/BloomNode.js';
 import type { Engine } from '../boot';
 import { OceanCompute } from './ocean';
 import { AtmosphereCompute } from './atmosphere';
+import { SkyCompute, skyU } from './sky';
+import { atmoU } from './atmosphere';
+import { Weather } from '../weather.js';
+import { smoothstep } from '../math.js';
 
 const params = new URLSearchParams(location.search);
 const RENDER_MODE = params.has('render');
@@ -57,9 +61,36 @@ async function start() {
   camera.position.set(0, Number(params.get('h') || 3), 0);
   camera.lookAt(camera.position.clone().add(new THREE.Vector3(Math.cos(pitch) * Math.cos(yaw), Math.sin(pitch), Math.cos(pitch) * Math.sin(yaw))));
 
-  // placeholder scene: flat sky colour and a flat sea
+  // weather: same preset, URL keys and snap as src/main.js
+  const weather = new Weather(params.get('preset') || 'breeze');
+  if (params.has('elev')) weather.set('sunElev', Number(params.get('elev')));
+  if (params.has('az')) weather.set('sunAz', Number(params.get('az')));
+  for (const k of Object.keys(weather.target)) if (params.has(k)) weather.set(k, Number(params.get(k)));
+  weather.snap();
+  const atmo = new AtmosphereCompute(renderer);
+  const sky = new SkyCompute(renderer, atmo);
+  const mixv = (a: number[], b: number[], t: number) => a.map((x, i) => x + (b[i] - x) * t);
+  // per frame, as the top of src/main.js frame(): light source, LUTs, environment (no squall front yet: local = state)
+  const updateSky = (dt: number) => {
+    weather.update(dt);
+    const S = weather.state;
+    const night = weather.time.sunElev < -7;
+    const sun = night ? weather.moonDir() : weather.sunDir();
+    atmoU.lightMag.value = night ? -12.7 : -26.74;
+    // fraction of direct sun reaching the haze below the clouds (a closed deck lets none through)
+    atmoU.hazeSun.value = (1 - smoothstep(0.3, 0.9, S.clouds)) * (1 - 0.85 * S.cloudDark) * 0.97 + 0.03 * (1 - S.cloudDark) * (1 - smoothstep(0.8, 0.9, S.clouds));
+    atmo.update(sun, camera.position.y, S.haze);
+    skyU.isMoon.value = night ? 1 : 0;
+    skyU.pixelAngle.value = (camera.fov * Math.PI) / 180 / canvas.height;
+    skyU.time.value = elapsed;
+    // water-leaving reflectance: deep blue, greyer with bubbles in a high wind, grey-green in rain
+    skyU.envRrs.value.fromArray(mixv(mixv([0.0004, 0.003, 0.0085], [0.0012, 0.0026, 0.0022], 0.8 * smoothstep(5, 24, S.wind)), [0.0013, 0.0024, 0.0025], smoothstep(0.1, 0.8, S.rain)));
+    sky.renderEnv();
+  };
+
+  // the clear sky, and a flat placeholder sea
   const scene = new THREE.Scene();
-  scene.backgroundNode = color(0x8fb4d8);
+  scene.backgroundNode = Fn(() => sky.background(positionWorldDirection))();
   const sea = new THREE.Mesh(new THREE.PlaneGeometry(160000, 160000), new THREE.MeshBasicNodeMaterial({ color: 0x1b3550 }));
   sea.rotation.x = -Math.PI / 2;
   scene.add(sea);
@@ -80,6 +111,7 @@ async function start() {
     uTime.value = elapsed;
     if (RENDER_MODE) { internals.info.reset(); internals._nodes.nodeFrame.update(); }
     for (const s of scopes) device.pushErrorScope(s);
+    updateSky(dt);
     pipeline.render();
     engine.frames++;
     for (let i = 0; i < scopes.length; i++) {
@@ -107,10 +139,10 @@ async function start() {
   // follow src/main.js: ?q, else 'high' in ?render and 'rt' live.
   const q = params.get('q') || (RENDER_MODE ? 'high' : 'rt');
   const ocean = new OceanCompute(renderer, q === 'rt' ? [256, 256, 128, 128] : [512, 256, 256, 256]);
-  const atmo = new AtmosphereCompute(renderer);
   window.portTest = {
     ocean,
     atmo,
+    sky,
     // a half-float storage texture as a Float32Array, rows in texel order (y = 0 first)
     async readTexture(tex: THREE.Texture) {
       const { width: w, height: h } = tex.image as { width: number; height: number };

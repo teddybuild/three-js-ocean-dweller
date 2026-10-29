@@ -12,7 +12,7 @@ export function relRms(got, want, stride = 4, ch = [0, 1, 2, 3], gotStride = str
     const w = want[i * stride + ch[c]], d = got[i * gotStride + gotCh[c]] - w;
     e += d * d; r += w * w;
   }
-  return r === 0 ? (e === 0 ? 0 : Infinity) : Math.sqrt(e / r);
+  return r === 0 ? NaN : Math.sqrt(e / r); // an all-zero reference fails: it would hide two empty buffers
 }
 
 // prints one result line and collects failures; mustFail: a known-bad case that has to exceed the limit
