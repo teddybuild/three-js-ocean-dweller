@@ -3,7 +3,8 @@
 ## Status
 
 Accepted 2026-10-29. Owner: "ok i want the full port"; port location "Same repo, side by side"; fidelity "Same feel,
-freedom to change"; "after each milestone you need to have codex and agy check".
+freedom to change"; "after each milestone you need to have codex and agy check" (reversed 2026-10-29: "new rule just
+iterate fast and then at end have reviews done").
 
 ## Context
 
@@ -18,8 +19,8 @@ for browser and Electron, on WebGPU.
   The default flips only when the owner approves parity.
 - Hand port, milestone order from the Codex plan review: harness, FFT alone, atmosphere + sky + exposure, water,
   clouds, weather fx, parity (`docs/systems/three-port.md`).
-- Each milestone ends with `pnpm check`, `node tools/diff.mjs`, then independent Codex and agy reviews, then a
-  `port-m<N>` tag.
+- Each milestone ends with `pnpm check` and `node tools/diff.mjs`, then a `port-m<N>` tag. Independent Codex and agy
+  reviews run once, at the end of the port.
 
 ## Why
 
