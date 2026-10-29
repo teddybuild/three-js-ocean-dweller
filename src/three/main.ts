@@ -4,6 +4,7 @@ import * as THREE from 'three/webgpu';
 import { pass, color, uniform } from 'three/tsl';
 import { bloom } from 'three/addons/tsl/display/BloomNode.js';
 import type { Engine } from '../boot';
+import { OceanCompute } from './ocean';
 
 const params = new URLSearchParams(location.search);
 const RENDER_MODE = params.has('render');
@@ -100,6 +101,21 @@ async function start() {
     adapter: { vendor: ai.vendor, architecture: ai.architecture, description: ai.description, fallback: typeof ai.isFallbackAdapter === 'boolean' ? ai.isFallbackAdapter : null },
   };
   window.engine = engine;
+
+  // the FFT ocean (milestone 1), not drawn yet; tools/fft-diff.mjs drives it through window.oceanTest. FFT sizes
+  // follow src/main.js: ?q, else 'high' in ?render and 'rt' live.
+  const q = params.get('q') || (RENDER_MODE ? 'high' : 'rt');
+  const ocean = new OceanCompute(renderer, q === 'rt' ? [256, 256, 128, 128] : [512, 256, 256, 256]);
+  window.oceanTest = {
+    ocean,
+    // runs fn inside the same error scopes as a frame; errors land in engine.errors
+    async scoped<T>(fn: () => Promise<T>) {
+      for (const s of scopes) device.pushErrorScope(s);
+      const out = await fn();
+      for (let i = 0; i < scopes.length; i++) { const e = await device.popErrorScope(); if (e) errors.push(e.message); }
+      return out;
+    },
+  };
   if (!RENDER_MODE) {
     let last = performance.now();
     renderer.setAnimationLoop((now: number) => { frame(Math.min((now - last) / 1000, 0.1)); last = now; });

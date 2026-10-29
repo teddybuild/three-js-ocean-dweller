@@ -247,19 +247,25 @@ void main() {
   oSlope = vec4(s, s * s);
 }`;
 
+// Cascades with FFT size N, band limits and texel size; shared with the three.js port (src/three/ocean.ts).
+export function cascadesFor(res) {
+  const cascades = CASCADES.map((c, i) => ({ ...c, N: res[i] }));
+  const dk = (L) => (2 * Math.PI) / L;
+  // band limits: cascade i covers [6*dk_i, 6*dk_{i+1})
+  for (let i = 0; i < cascades.length; i++) {
+    const c = cascades[i];
+    c.kmin = i === 0 ? dk(c.L) * 0.5 : 6 * dk(c.L);
+    c.kmax = i === cascades.length - 1 ? 1e9 : 6 * dk(cascades[i + 1].L);
+    c.texel = c.L / c.N;
+  }
+  return cascades;
+}
+
 export class Ocean {
   // res: FFT size per cascade (power of two). Fine cascades can run at 128 on slower GPUs.
   constructor(gl, res = [N, N, N, N]) {
     this.gl = gl;
-    this.cascades = CASCADES.map((c, i) => ({ ...c, N: res[i] }));
-    const dk = (L) => (2 * Math.PI) / L;
-    // band limits: cascade i covers [6*dk_i, 6*dk_{i+1})
-    for (let i = 0; i < this.cascades.length; i++) {
-      const c = this.cascades[i];
-      c.kmin = i === 0 ? dk(c.L) * 0.5 : 6 * dk(c.L);
-      c.kmax = i === this.cascades.length - 1 ? 1e9 : 6 * dk(this.cascades[i + 1].L);
-      c.texel = c.L / c.N;
-    }
+    this.cascades = cascadesFor(res);
     this.progSpectrum = new Program(gl, FULLSCREEN_VS, SPECTRUM_FS, { label: 'spectrum' });
     this.progEvolve = new Program(gl, FULLSCREEN_VS, EVOLVE_FS, { label: 'evolve' });
     this.progFFT = new Program(gl, FULLSCREEN_VS, FFT_FS, { label: 'fft' });
@@ -390,7 +396,7 @@ function swellCPU(w, Hs, Tp) {
   return (5 / 16) * Hs * Hs * Math.pow(wp, 4) / Math.pow(w, 5) * Math.exp(-1.25 * Math.pow(wp / w, 4)) *
     (1 - 0.287 * Math.log(gamma)) * Math.pow(gamma, Math.exp(-0.5 * d * d));
 }
-function computeStats(p, cascades) {
+export function computeStats(p, cascades) {
   const U = Math.max(p.wind, 0.3);
   const kminAll = cascades[0].kmin;
   const last = cascades[cascades.length - 1];

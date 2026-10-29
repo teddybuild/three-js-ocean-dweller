@@ -54,6 +54,7 @@ history and numbers go in the day's `docs/log/` file.
 - `pnpm dev` - dev server on http://localhost:5173 (port fixed for `tools/`). `pnpm preview` serves `dist/` on :4173.
 - URL flags: see `src/main.js` (`?render`, presets). `?engine=three` runs the WebGPU port.
 - `node tools/diff.mjs [scene ...] [--self-test]` - renders both engines, writes `tmp/diff/<scene>.png`, prints PSNR.
+- `node tools/fft-diff.mjs [--self-test]` - the three.js FFT ocean against a CPU DFT and against the GL ocean.
 
 ## Workflow
 
