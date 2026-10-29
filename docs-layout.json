@@ -1,0 +1,39 @@
+{
+  "root": [
+    "README.md",
+    "AGENTS.md",
+    "CLAUDE.md",
+    "docs-layout.json",
+    ".gitignore",
+    "docs",
+    "LICENSE",
+    "index.html",
+    "package.json",
+    "pnpm-lock.yaml",
+    "tsconfig.json",
+    "vite.config.ts",
+    ".nojekyll",
+    "src",
+    "public",
+    "tools",
+    "render",
+    "media"
+  ],
+  "docsRoot": [
+    "PLAN.md",
+    "ARCHITECTURE.md",
+    "OSS.md"
+  ],
+  "docsFolders": [
+    "adr",
+    "log",
+    "status",
+    "systems"
+  ],
+  "maxDocLines": 400,
+  "lineCapExempt": [
+    "docs/status/CHANGELOG.md"
+  ],
+  "minTopicLines": 20,
+  "maxHandoffs": 1
+}

@@ -1,15 +1,20 @@
 {
-  "name": "open-water",
-  "version": "1.0.0",
+  "name": "three-js-ocean-dweller",
+  "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Real-time physically based ocean with weather, rain and storms in pure WebGL2.",
+  "description": "Ocean dweller on the web: open-water's FFT ocean, sky and weather (WebGL2), three.js next.",
   "scripts": {
-    "dev": "node tools/serve.mjs 5173",
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "check": "tsc --noEmit && vite build",
     "shot": "node tools/shot.mjs",
     "render": "node render/render.mjs"
   },
   "devDependencies": {
-    "puppeteer-core": "^23.11.1"
+    "puppeteer-core": "^23.11.1",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.5"
   }
 }

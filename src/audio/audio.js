@@ -3,7 +3,7 @@
 // live mix (AudioContext) and the offline soundtrack of the film (OfflineAudioContext).
 
 const THUNDER_FILES = ['thunder_a', 'thunder_b', 'thunder_c', 'thunder_d', 'thunder_e', 'thunder_f'];
-const BASE = new URL('../../assets/audio/', import.meta.url);
+const BASE = new URL('audio/', document.baseURI); // public/audio, served at the site root by Vite
 
 function hash(n) { const x = Math.sin(n * 127.1 + 311.7) * 43758.5453; return x - Math.floor(x); }
 function vnoise(t) { const i = Math.floor(t), f = t - i, u = f * f * (3 - 2 * f); return hash(i) * (1 - u) + hash(i + 1) * u; }

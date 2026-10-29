@@ -238,4 +238,4 @@ render/      offline film renderer
 ## License
 
 The code is MIT licensed. The audio recordings keep their Creative Commons licenses; see
-[assets/audio/CREDITS.md](assets/audio/CREDITS.md).
+[public/audio/CREDITS.md](public/audio/CREDITS.md).
