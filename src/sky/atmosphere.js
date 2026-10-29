@@ -447,8 +447,11 @@ vec3 shafts(vec3 ro, vec3 dir, float dist) {
 uniform vec4 uFogFront;   // xy normal (towards the storm), z offset (m), w width (0 = off)
 float frontCurve(float along) { return 1400.0 * sin(along / 7000.0) + 650.0 * sin(along / 2900.0 + 1.3); }
 uniform vec2 uFogCam;     // camera xz
+uniform vec2 uFogCell;    // squall cell: x half-length along the line, y depth behind it (m)
 // antiderivative of the linear ramp clamp((u + w) / 2w, 0, 1)
 float rampInt(float u, float w) { return u < -w ? 0.0 : (u > w ? u : (u + w) * (u + w) / (4.0 * w)); }
+// path length inside the ramp from s0, rate a, over L
+float rampPath(float s0, float a, float L, float w) { return abs(a) < 1e-5 ? clamp((s0 + w) / (2.0 * w), 0.0, 1.0) * L : (rampInt(s0 + a * L, w) - rampInt(s0, w)) / a; }
 float fogHash(float x) { return fract(sin(x * 91.17) * 43758.5453); }
 float fogNoise(float x) { float i = floor(x), f = fract(x); f = f * f * f * (f * (f * 6.0 - 15.0) + 10.0); return mix(fogHash(i), fogHash(i + 1.0), f); }
 uniform vec2 uSprayHaze;  // x: extinction at the sea surface (1/m), y: camera height (m)
@@ -491,7 +494,10 @@ vec3 applyFog(vec3 col, vec3 dir, float dist) {
     // meandering front: shift the line by its curve where this ray crosses it
     float tc0 = abs(a) > 1e-5 ? -s0 / a : 0.0;
     s0 -= frontCurve(dot(uFogCam + dir.xz * max(tc0, 0.0), vec2(-n.y, n.x)));
-    float m = abs(a) < 1e-5 ? clamp((s0 + w) / (2.0 * w), 0.0, 1.0) * L : (rampInt(s0 + a * L, w) - rampInt(s0, w)) / a;
+    // (minus the path beyond the cell's back edge)
+    vec2 cell = vec2(uFogCell.x > 0.0 ? uFogCell.x : 1e7, uFogCell.y > 0.0 ? uFogCell.y : 1e7);  // 0 = endless
+    float m = rampPath(s0, a, L, w) - rampPath(s0 - cell.y, a, L, w);
+    float sIn = min(s0, cell.y - s0);
     // rain shafts: curtain density varies along the front where the ray crosses it
     float tc = abs(a) > 1e-5 ? -s0 / a : 0.0;
     // (inside the storm: the shafts around the camera)
@@ -501,11 +507,13 @@ vec3 applyFog(vec3 col, vec3 dir, float dist) {
     float sh0 = fogNoise(along / 2200.0) * 0.6 + fogNoise(along / 1370.0 + 3.1) * 0.4;
     float shafts = 0.15 + 3.0 * pow(sh0, 2.0) * (0.6 + 0.4 * mix(fogNoise(along / 430.0 + 7.0), 0.5, smoothstep(6000.0, 15000.0, max(tc, 0.0))));
     // under the downpour the veil closes round the viewer, densest low down; the base shows above
-    shafts = max(shafts, smoothstep(-w, w, s0) * (0.35 + 0.6 * fogNoise(along / 700.0 + 2.0)) * (1.0 - 0.35 * smoothstep(0.2, 0.6, dir.y)));
+    shafts = max(shafts, smoothstep(-w, w, sIn) * (0.35 + 0.6 * fogNoise(along / 700.0 + 2.0)) * (1.0 - 0.35 * smoothstep(0.2, 0.6, dir.y)));
     // curtains fade out into the cloud base instead of ending at a ruler-straight line
     float hcr = max(dir.y * max(tc, 0.0), 0.0);
     float st = max(uFogStorm.x * shafts - uFogDensity, 0.0) * max(m, 0.0) * (1.0 - smoothstep(0.8 * uFogTop, uFogTop, hcr));
-    st = min(st, mix(3.0 * shafts + 0.6, 1e4, smoothstep(-w, w, s0)));
+    // no curtains beyond the cell's ends
+    st *= smoothstep(cell.x + w, cell.x - w, abs(along));
+    st = min(st, mix(3.0 * shafts + 0.6, 1e4, smoothstep(-w, w, sIn)));
     tau += st;
     stormFrac = st / max(tau, 1e-6);
     // fine vertical streaks of falling rain, slanted by the wind, where the ray meets the curtain

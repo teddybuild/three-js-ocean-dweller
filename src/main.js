@@ -194,7 +194,11 @@ export class App {
     const fz = this.cam.pos[0] * fn[0] + this.cam.pos[2] * fn[1] + S.frontDist;
     const fAlong = -this.cam.pos[0] * fn[1] + this.cam.pos[2] * fn[0];
     const fCurve = 1400 * Math.sin(fAlong / 7000) + 650 * Math.sin(fAlong / 2900 + 1.3);
-    const mCam = fOn ? smoothstep(-S.frontWidth, S.frontWidth, -S.frontDist - fCurve) : 0;
+    // squall cell: half-length along the line (centred on along = 0) and depth behind it
+    // (0 = endless, also in the shaders)
+    const fCell = [S.frontLen / 2, S.frontDepth];
+    const sCam = -S.frontDist - fCurve;
+    const mCam = fOn ? smoothstep(-S.frontWidth, S.frontWidth, Math.min(sCam, (fCell[1] || 1e7) - sCam, (fCell[0] || 1e7) - Math.abs(fAlong))) : 0;
     const L = {
       rain: S.rain + (S.sRain - S.rain) * mCam,
       clouds: S.clouds + (S.sClouds - S.clouds) * mCam,
@@ -232,7 +236,7 @@ export class App {
     const stormFog = S.sMist * 1.2e-3 + rainBeta(S.sRain);
     const fogU = {
       uFogDensity: fogDensity, uFogTop: fOn ? (S.cloudBase + S.sBase) * 0.5 + 100 : S.cloudBase + 100,
-      uFogFront: fOn ? [fn[0], fn[1], fz, S.frontWidth] : [1, 0, 0, 0],
+      uFogFront: fOn ? [fn[0], fn[1], fz, S.frontWidth] : [1, 0, 0, 0], uFogCell: fCell,
       uFogStorm: [stormFog, (night ? 0.4 : 0.3) + ((night ? 0.5 : 0.6) - (night ? 0.4 : 0.3)) * mCam, (fogDensity + mCam * Math.max(stormFog - fogDensity, 0)) * (fOn ? (S.cloudBase + S.sBase) * 0.5 + 100 : S.cloudBase + 100)],
       uFogCam: [this.cam.pos[0], this.cam.pos[2]],
       uRainCell: [fOn ? 0 : rainBeta(S.rain), Math.cos(wdr) * S.wind * 0.8 * t, Math.sin(wdr) * S.wind * 0.8 * t],
@@ -255,8 +259,8 @@ export class App {
     const cloudU = {
       windOffset: this.windOffset, coverage: S.clouds, base: S.cloudBase,
       top: S.cloudBase + 1800 + S.cloudDark * 5200, density: 0.11 - S.cloudDark * 0.05, dark: S.cloudDark,
-      front: fOn ? [fn[0], fn[1], fz, S.frontWidth] : [1, 0, 0, 0],
-      stormA: [S.sClouds, S.sDark, 0.11 + S.sDark * 0.17, S.sBase], stormTop: S.sBase + 2500 + S.sDark * 8000, // cumulonimbus tops ~9-10 km
+      front: fOn ? [fn[0], fn[1], fz, S.frontWidth] : [1, 0, 0, 0], frontCell: fCell,
+      stormA: [S.sClouds, S.sDark, 0.11 + S.sDark * 0.17, S.sBase], stormTop: S.sTop > 0 ? S.sTop : S.sBase + 2500 + S.sDark * 8000, // cumulonimbus tops ~9-10 km
       flash: [lp[0], lp[1], lp[2], flash * (night ? 30 : 0.025)], flashColor: [0.75, 0.8, 1.0], blend: Math.max(QUALITY.blend + (0.85 - QUALITY.blend) * smoothstep(0.02, 0.3, flash), frontBlend), steps: QUALITY.steps, detailFoot: QUALITY.detailFoot,
       lightSteps: QUALITY.lightSteps, lightDetail: QUALITY.lightDetail, check: QUALITY.check, upSteps: QUALITY.upSteps,
       shapeLod: params.has('shapelod') ? Number(params.get('shapelod')) : -1,

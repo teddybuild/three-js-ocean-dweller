@@ -27,7 +27,8 @@ export const PRESETS = {
 };
 
 // squall front (off unless a timeline or preset turns it on): direction, distance, storm-side weather
-const FRONT = { front: 0, frontDist: 20000, frontAz: 0, frontWidth: 3500, sClouds: 0.97, sDark: 0.88, sBase: 650, sRain: 1, sMist: 0.3 };
+// frontLen / frontDepth bound it to a cell (m along the line / behind it, 0 = endless); sTop: storm cloud top (m, 0 = auto)
+const FRONT = { front: 0, frontDist: 20000, frontAz: 0, frontWidth: 3500, frontLen: 0, frontDepth: 0, sClouds: 0.97, sDark: 0.88, sBase: 650, sTop: 0, sRain: 1, sMist: 0.3 };
 for (const p of Object.values(PRESETS)) for (const k in FRONT) if (!(k in p)) p[k] = FRONT[k];
 const KEYS = Object.keys(PRESETS.calm);
 

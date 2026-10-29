@@ -98,6 +98,7 @@ uniform float uTop;           // m
 uniform float uDensity;       // extinction scale (1/m)
 uniform float uDark;          // storm darkness 0..1
 uniform vec4 uFront;          // squall front: xy unit normal (towards the storm), z offset (m), w width (0 = off)
+uniform vec2 uFrontCell;      // squall cell: x half-length along the line (centred on along = 0), y depth behind it (m)
 uniform vec4 uStormA;         // storm side: coverage, darkness, density, base
 uniform float uStormTop;      // storm side: top (m)
 uniform float uShapeLod;      // debug: >= 0 forces the shape-noise mip level
@@ -113,7 +114,13 @@ const float RG_M = 6360000.0;
 
 float remapc(float x, float a, float b, float c, float d) { return c + (x - a) / (b - a) * (d - c); }
 // the squall line meanders (frontCurve is shared with the fog in SKY_LOOKUP_GLSL and the CPU)
-float frontDist(vec2 xz) { return dot(xz, uFront.xy) - uFront.z - frontCurve(dot(xz, vec2(-uFront.y, uFront.x))); }
+// (bounded to the cell: the distance to its nearest edge, positive inside)
+float frontDist(vec2 xz) {
+  float along = dot(xz, vec2(-uFront.y, uFront.x));
+  float d = dot(xz, uFront.xy) - uFront.z - frontCurve(along);
+  vec2 c = vec2(uFrontCell.x > 0.0 ? uFrontCell.x : 1e7, uFrontCell.y > 0.0 ? uFrontCell.y : 1e7);  // 0 = endless
+  return min(d, min(c.y - d, c.x - abs(along)));
+}
 float frontMask(vec2 xz) { return uFront.w > 0.0 ? smoothstep(-uFront.w, uFront.w, frontDist(xz)) : 0.0; }
 const float SCUD_BASE = 260.0;
 float shellBase() {
@@ -137,7 +144,9 @@ vec4 regime(vec2 xz, float h, out float base, out float top) {
     vec4 bf = textureLod(uShape, bp * 3.1 + 0.29, 2.0);
     float bulge = ((bn.r * 0.7 + bn.g * 0.3 - 0.5) * 5500.0 + (bf.r - 0.5) * 1400.0) * smoothstep(300.0, 2500.0, h);
     tv = 0.7 + 0.3 * bn.g;
-    m = smoothstep(-uFront.w, uFront.w, frontDist(xz) + anvil + bulge);
+    // (a small cell bulges and spreads its anvil in proportion: km-scale noise would swallow it)
+    float cs = uFrontCell.x > 0.0 || uFrontCell.y > 0.0 ? clamp(min(uFrontCell.x > 0.0 ? uFrontCell.x : 1e7, uFrontCell.y > 0.0 ? uFrontCell.y : 1e7) / 6000.0, 0.15, 1.0) : 1.0;
+    m = smoothstep(-uFront.w, uFront.w, frontDist(xz) + (anvil + bulge) * cs);
   }
   base = mix(uBase, uStormA.w, m);
   top = mix(uTop, uStormTop * tv, m);
@@ -250,6 +259,9 @@ float stormHazeLit(vec3 cam, vec3 rd, float md) {
   // the first 12 km are handled by the shadow-mapped crepuscular term (shafts) in the composite
   float tF = rate > 1e-4 ? max(-fd0 / rate, 0.0) : 1e9;
   float lit = 1.0 - max(md - min(max(sEdge, 12000.0), tF), 0.0) / max(md, 1.0);
+  // a ray that passes beside a short cell is not in its shadow
+  float alongF = dot(cam.xz + rd.xz * min(tF, 1e6), vec2(-uFront.y, uFront.x));
+  lit = mix(lit, 1.0, (uFrontCell.x > 0.0 ? smoothstep(uFrontCell.x, uFrontCell.x + 2.0 * uFront.w, abs(alongF)) : 0.0));
   return mix(0.15, 1.0, lit);
 }
 float hg(float c, float g) { float g2 = g * g; return (1.0 - g2) / (4.0 * 3.14159 * pow(1.0 + g2 - 2.0 * g * c, 1.5)); }
@@ -624,7 +636,7 @@ export class Clouds {
       uShape: this.shape, uDetail: this.detail, uWeather: this.weatherMap,
       uWindOffset: u.windOffset, uCoverage: u.coverage, uBase: u.base, uTop: u.top,
       uDensity: u.density, uDark: u.dark, uFlash: u.flash, uFlashColor: u.flashColor,
-      uShapeLod: u.shapeLod ?? -1, uFront: u.front || [1, 0, 0, 0], uStormA: u.stormA || [0, 0, 0, 0], uStormTop: u.stormTop || 0,
+      uShapeLod: u.shapeLod ?? -1, uFront: u.front || [1, 0, 0, 0], uStormA: u.stormA || [0, 0, 0, 0], uStormTop: u.stormTop || 0, uFrontCell: u.frontCell || [0, 0],
     };
   }
 
