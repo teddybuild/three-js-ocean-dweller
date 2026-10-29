@@ -11,7 +11,7 @@ Where the project is right now. Read this first, then the newest handoff.
 
 ## Right now (2026-10-29)
 
-three.js WebGPU port: `port-m0`..`port-m4` tagged and pushed; clouds and shafts match GL (`breeze` 33.9 dB, `tools/cloud-diff.mjs`). Next: M5 weather fx (fog, rain, spray, lightning). Codex and agy review once at the end of the port; carry-overs in `open/`. Spec: `docs/systems/three-port.md`.
+three.js WebGPU port: `port-m0`..`port-m5` tagged and pushed; every effect is ported (fog, rain, spray, lightning in M5; all diff scenes 33.9-48.7 dB). Next: parity (MSAA, thunder audio, live `rt` path), then the Codex + agy review. Codex and agy review once at the end of the port; carry-overs in `open/`. Spec: `docs/systems/three-port.md`.
 
 ## How to update
 

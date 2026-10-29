@@ -17,11 +17,15 @@ const SCENES = {
   clear: 'preset=breeze&float=0&clouds=0&pitch=10',
   // the water under the clear sky (milestone 3)
   sea: 'preset=breeze&float=0&clouds=0',
+  // milestone 5: a downpour with spray (rain streaks, splashes, fog), a storm with a forced ground strike at t 2.9
+  rain: 'preset=rain&rain=0.8&wind=20&float=0',
+  storm: 'preset=storm&float=0&strikeAt=2.9',
 };
 // fraction of rows from the top that the metrics cover: at pitch 10 and fov 42 the horizon is at 73 %
 const CROP = { clear: 0.68 };
-// PSNR floors of ported scenes: below it the run fails (2026-10-29: clear sky 48.5 dB, sea 33.4 dB, breeze 33.9 dB)
-const MIN_PSNR = { clear: 38, sea: 30, breeze: 30 };
+// PSNR floors of ported scenes: below it the run fails (2026-10-29: clear sky 48.5 dB, sea 33.4 dB, breeze 33.9 dB,
+// squall 42.0 dB, rain 43.1 dB, storm 41.2 dB)
+const MIN_PSNR = { clear: 38, sea: 30, breeze: 30, squall: 35, rain: 35, storm: 35 };
 const W = 1280, H = 720, WARM = 3, DT = 1 / 30, FRAMES = Math.round(WARM / DT);
 // GL names the device; WebGPU redacts it to vendor + architecture, which on this one-GPU box is the 5080
 const EXPECT = { vendor: /nvidia/i, device: process.env.EXPECT_GPU || 'RTX 5080', architecture: process.env.EXPECT_GPU_ARCH || 'blackwell' };

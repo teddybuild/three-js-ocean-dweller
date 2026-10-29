@@ -11,6 +11,9 @@ import { WaterMesh } from './water';
 import { FoamTextureCompute } from './foam';
 import { CloudsCompute, cloudU, frontCurve } from './clouds';
 import { OceanProbe } from './probe';
+import { Rain } from './rain';
+import { Spray } from './spray';
+import { Lightning } from './lightning';
 import { atmoU } from './atmosphere';
 import { Weather } from '../weather.js';
 import { smoothstep } from '../math.js';
@@ -87,6 +90,12 @@ async function start() {
   const water = new WaterMesh({ ...ocean.textures(), env: sky.env, sky, foamTex: foam.tex, shadow: clouds.shadow, shadowRect: clouds.shadowRect }, { angular: q === 'rt' ? 400 : 640 });
   const gustDrift = [0, 0];
   const probe = new OceanProbe(renderer, ocean.textures());
+  // weather effects drawn after the water (src/fx): lightning channel, spray, rain
+  const lightning = new Lightning(renderer);
+  const spray = new Spray(renderer, sky, ocean.textures());
+  const rain = new Rain(renderer, sky, ocean.textures());
+  const rainDrift = [0, 0];
+  let boltT = 1, forcedStrike = false;
   // Floating camera, as src/main.js updateCamera + cameraMatrices: heave, pitch and roll with the sea (a small boat
   // responds to waves longer than itself, so the probe samples a mip level matching an ~8 m hull). ?render waits
   // for the probe (GL's sync readback); live uses the last finished one.
@@ -145,6 +154,22 @@ async function start() {
     };
     // fraction of direct sun reaching the haze below the clouds (a closed deck lets none through)
     atmoU.hazeSun.value = (1 - smoothstep(0.3, 0.9, L.clouds)) * (1 - 0.85 * L.dark) * 0.97 + 0.03 * (1 - L.dark) * (1 - smoothstep(0.8, 0.9, L.clouds));
+    // lightning: flash intensity drives cloud emission, sky/sea illumination and thunder (as src/main.js)
+    const lcam = { pos: cp, yaw: cam.yaw };
+    if (params.has('strikeAt') && elapsed >= Number(params.get('strikeAt')) && !forcedStrike) {
+      forcedStrike = true;
+      lightning.trigger(lcam, { dist: Number(params.get('sdist') || 3500), az: cam.yaw + Number(params.get('saz') || 0.15), ground: true, base: S.cloudBase });
+    }
+    const flash = lightning.update(dt, S.lightning, lcam, S.cloudBase);
+    lightning.events.splice(0); // thunder: the audio is not ported
+    const lp = lightning.pos;
+    const ldist = Math.hypot(lp[0] - cp.x, lp[2] - cp.z);
+    // illuminance of a stroke ~ I / d^2 with I ~ 1e8 cd, relative to the light source (sun ~1e5 lux, moon ~0.25)
+    const flashE = Math.min((flash * 1e8) / (ldist * ldist + 300 * 300) / (night ? 0.25 : 1e5), 6);
+    const flashRGB = [0.8 * flashE, 0.85 * flashE, flashE];
+    const lv = new THREE.Vector3(lp[0] - cp.x, (night ? lp[1] * 0.3 : lp[1] * 0.5) - cp.y, lp[2] - cp.z);
+    fogU.flashFog.value.fromArray(flashRGB.map((x) => x * 0.25));
+    fogU.flashDir.value.copy(lv).normalize();
     // rain and mist (as src/main.js fogU): rain extinction takes visibility from >20 km to ~1.5 km in a downpour
     const rainBeta = (r: number) => (r > 0.002 ? 0.336e-3 * Math.pow(r * 50, 0.63) : 0);
     const fogDensity = S.mist * 1.2e-3 + rainBeta(S.rain);
@@ -159,6 +184,15 @@ async function start() {
     fogU.rainCell.value.set(fOn ? 0 : rainBeta(S.rain), Math.cos(wdr) * S.wind * 0.8 * elapsed, Math.sin(wdr) * S.wind * 0.8 * elapsed);
     // spray haze from breaking crests: grows from a near gale (~14 m/s) upwards
     fogU.sprayHaze.value.set(smoothstep(14, 24, S.wind) * 1.8e-3, Math.max(cp.y, 0.5));
+    // the bolt seen through the rain: base fog plus the storm side's curtains along the path (the water reads last
+    // frame's value, as GL)
+    const boltWater = lightning.ground && lightning.bolt > 0.01 && lightning.strike?.ground
+      ? [lightning.ground[0], lightning.ground[1], lightning.ground[2], lightning.bolt * 2600 * boltT] : [0, 0, 0, 0];
+    {
+      const s0 = -S.frontDist - fCurve, sB = s0 + (lv.x * fn[0] + lv.z * fn[1]);
+      const inside = fOn ? (sB === s0 ? (s0 > 0 ? 1 : 0) : Math.min(Math.max((Math.max(sB, 0) - Math.max(s0, 0)) / (sB - s0), 0), 1)) : 0;
+      boltT = Math.exp(-(fogDensity * ldist + Math.max(stormFog - fogDensity, 0) * ldist * inside * 0.8));
+    }
     skyU.isMoon.value = night ? 1 : 0;
     skyU.pixelAngle.value = (camera.fov * Math.PI) / 180 / canvas.height;
     skyU.time.value = elapsed;
@@ -180,7 +214,12 @@ async function start() {
     cu.stormA.value.set(S.sClouds, S.sDark, 0.11 + S.sDark * 0.17, S.sBase);
     cu.stormTop.value = S.sTop > 0 ? S.sTop : S.sBase + 2500 + S.sDark * 8000; // cumulonimbus tops ~9-10 km
     cu.shapeLod.value = params.has('shapelod') ? Number(params.get('shapelod')) : -1;
-    clouds.render(camera, { ...CQ, blend: Math.max(CQ.blend, 0.25 * smoothstep(3, 40, frontStep)) });
+    cu.flash.value.set(lp[0], lp[1], lp[2], flash * (night ? 30 : 0.025));
+    // a flash changes the cloud light within a frame, so most of the history is dropped; the offline tiers then average
+    // two independently jittered passes
+    const blend = Math.max(CQ.blend + (0.85 - CQ.blend) * smoothstep(0.02, 0.3, flash), 0.25 * smoothstep(3, 40, frontStep));
+    const cloudPasses = flash > 0.02 && !CQ.check ? 2 : 1;
+    for (let k = 0; k < cloudPasses; k++) clouds.render(camera, { ...CQ, blend: blend / (1 + k * blend) });
     sky.clouds.value = clouds.screen;
     sky.cloudsEnv.value = clouds.env;
     skyU.cloudsOn.value = 1;
@@ -193,7 +232,7 @@ async function start() {
     // water-leaving reflectance: deep blue, greyer with bubbles in a high wind, grey-green in rain
     skyU.envRrs.value.fromArray(mixv(mixv([0.0004, 0.003, 0.0085], [0.0012, 0.0026, 0.0022], 0.8 * smoothstep(5, 24, S.wind)), [0.0013, 0.0024, 0.0025], smoothstep(0.1, 0.8, L.rain)));
     sky.renderEnv();
-    // the water's uniforms, as src/main.js waterUniforms (no lightning yet)
+    // the water's uniforms, as src/main.js waterUniforms
     const st = ocean.stats, wu = water.u;
     gustDrift[0] += Math.cos(wdr) * S.wind * 0.9 * dt;
     gustDrift[1] += Math.sin(wdr) * S.wind * 0.9 * dt;
@@ -210,9 +249,18 @@ async function start() {
     wu.dbgMask.value.fromArray((params.get('dbg') || '1,1,1').split(',').map(Number));
     wu.time.value = elapsed;
     wu.rain.value = L.rain;
+    wu.flash.value.fromArray(flashRGB);
+    wu.bolt.value.fromArray(boltWater);
     wu.windDir.value.set(Math.cos(wdr), Math.sin(wdr));
     wu.foamStretch.value = Math.min(Math.max((S.wind - 10) / 8, 0), 1);
-    // post options, as src/main.js passes them (no lightning yet)
+    // the effects (as src/main.js draws them)
+    const fxU = { camPos: cp, pixelAngle: skyU.pixelAngle.value };
+    lightning.draw({ ...fxU, fogDensity: 0, transmit: boltT, base: fOn ? Math.min(S.cloudBase, S.sBase) : S.cloudBase });
+    spray.update({ ...fxU, anchor: cam.base, time: elapsed, wind: S.wind, windVec: [Math.cos(wdr) * S.wind, Math.sin(wdr) * S.wind], flash: flashRGB });
+    rainDrift[0] += Math.cos(wdr) * S.wind * 0.8 * dt;
+    rainDrift[1] += Math.sin(wdr) * S.wind * 0.8 * dt;
+    rain.update({ ...fxU, rain: L.rain, time: elapsed, exposure: 1 / 60, wind: [Math.cos(wdr) * S.wind * 0.8, Math.sin(wdr) * S.wind * 0.8], drift: rainDrift, flash: flashRGB });
+    // post options, as src/main.js passes them
     // shooting into a low sun a photographer meters the bright sky (scene), not the incident light
     const fwd = camera.getWorldDirection(new THREE.Vector3());
     const fh = Math.hypot(fwd.x, fwd.z) || 1;
@@ -233,7 +281,7 @@ async function start() {
   // the sky with the clouds, and the water
   const scene = new THREE.Scene();
   scene.backgroundNode = Fn(() => sky.backgroundWithClouds(positionWorldDirection, vec2(screenUV.x, screenUV.y.oneMinus()), cameraPosition))();
-  scene.add(water.mesh);
+  scene.add(water.mesh, lightning.mesh, spray.mesh, rain.mesh);
 
   // the HDR scene (half float, as GL's rgba16f target; no MSAA yet), then open-water's post chain to the canvas.
   // Incident metering: an 18 % grey card under the sun (through the clouds over the camera) and sky

@@ -21,7 +21,9 @@ How the port is built and checked. Decision: `docs/adr/0001-three-webgpu-port.md
   irradiance are compute kernels writing half-float storage textures texel by texel (row y is v = (y + 0.5) / h, as
   in GL). The environment gets its mips from three's storage-texture auto-mips, which run when the texture is next
   sampled, so the irradiance pass is a separate `compute()` call. The background is the clear-sky branch of
-  `SKY_FS` (`scene.backgroundNode`) with the clouds (M4) and the crepuscular rays (`sky.withShafts`, M4); fog is M5. `src/sky/atmosphere.js` exports
+  `SKY_FS` (`scene.backgroundNode`) with the clouds (M4), the crepuscular rays (`sky.withShafts`, M4) and the rain, mist, squall curtains and spray
+  haze (`sky.fog(dir, dist)` -> `{ T, Lf }`, `applyFog` = col T + Lf, M5). The background fogs sky and clouds
+  separately, the clouds only to their mean distance (`sky.cloudDepth`). `src/sky/atmosphere.js` exports
   `mediumFor()` for both engines.
 - Post (`src/three/post.ts`, M2): open-water's bloom pyramid, metering, eye adaptation and AgX composite as QuadMesh
   passes; the scene renders into a half-float target first. The composite runs with `NoToneMapping` and the working
@@ -30,7 +32,7 @@ How the port is built and checked. Decision: `docs/adr/0001-three-webgpu-port.md
   outputs clip space from world positions (no model matrix, never culled). The fragment shader is `water.js` FS plus
   `RAIN_SURFACE_GLSL` and `FOAM_GLSL`; every derivative and implicit-LOD sample is taken before the first `If`. The
   foam texture is a compute kernel. Stubs until M4/M5: sun visibility is `atmoU.hazeSun` (GL's value outside the
-  cloud-shadow rect); shafts as GL (`withShafts` after the aerial perspective); no fog, no lightning. The camera floats on `OceanProbe` as GL's `updateCamera`;
+  cloud-shadow rect); shafts and fog as GL (after the aerial perspective), lightning flash and ground-strike reflection (`bolt`). The camera floats on `OceanProbe` as GL's `updateCamera`;
   `?render` awaits each probe read, live uses the last finished one.
 - Clouds (`src/three/clouds.ts`, M4): noise volumes, weather map, shadow map, env and
   screen passes as compute kernels writing GL's texel layout (v up). 3D mips are written level by level (three only
@@ -39,6 +41,11 @@ How the port is built and checked. Decision: `docs/adr/0001-three-webgpu-port.md
   is most of the light: without them the backlit clouds read 2.4x GL). Texture nodes `sky.clouds`, `sky.cloudsEnv`
   and `sky.shaftShadow` are re-pointed per frame. `THREE.Vector4()` defaults w to 1: every vec4 uniform whose w is a
   switch (`cloudU.flash`, water `bolt`) is created with an explicit 0.
+- Weather effects (`src/three/rain.ts`, `spray.ts`, `lightning.ts`, M5): instanced quads in NodeMaterials drawn
+  after the water (renderOrder 1-4: bolt, spray, splashes, streaks) with GL's blend factors; the vertex shaders
+  output clip space. Seeds and the lightning CPU model (rng(7), trigger, buildBolt, update) are GL's, so both engines
+  strike at the same place and time (`?strikeAt=t`). Not ported: thunder audio (`lightning.events` is dropped),
+  MSAA (and with it GL's `centroid` interpolation).
 
 ## Checks
 
@@ -60,7 +67,8 @@ How the port is built and checked. Decision: `docs/adr/0001-three-webgpu-port.md
   Relative RMS with rgb and alpha apart, plus the three/GL ratio of the channel means. `--self-test`: a shape slice
   against another slice must fail.
 - `diff.mjs` scene `clear` (no clouds, pitch 10) compares the top 68 % of rows and fails below 38 dB PSNR; scenes
-  `sea` (no clouds, pitch 1.5, mostly water) and `breeze` (clouds) fail below 30 dB.
+  `sea` (no clouds, pitch 1.5, mostly water) and `breeze` (clouds) fail below 30 dB; `squall`, `rain` (downpour,
+  wind 20) and `storm` (forced ground strike) below 35 dB.
 - Headless Chrome 156 on Linux gets a hardware WebGPU adapter (nvidia blackwell) only with `--use-angle=vulkan
   --enable-features=Vulkan --enable-unsafe-webgpu` (`tools/browser.mjs`).
 
