@@ -1,6 +1,7 @@
 // Offline film render: deterministic frames from headless Chrome (GPU), piped into ffmpeg/x264,
 // with the soundtrack rendered by the same audio engine in an OfflineAudioContext.
 // Usage: node render/render.mjs [--fps 60] [--w 1920] [--h 1080] [--from 0] [--to 60] [--out out/open-water.mp4]
+//   [--engine three] (the WebGPU port; default the WebGL2 reference)
 import { spawn } from 'node:child_process';
 import { writeFile, mkdir } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
@@ -15,6 +16,7 @@ const out = resolve(args.out || 'out/open-water.mp4');
 const quality = args.q || 'high';
 const warm = Number(args.warm || 4);
 const crf = args.crf || '15';
+const engine = args.engine === 'three' ? 'three' : 'gl';
 
 await mkdir(dirname(out), { recursive: true });
 let browser, page;
@@ -22,8 +24,8 @@ let browser, page;
 // black. Such a frame is detected and the render resumes from it in a fresh browser.
 async function openPage() {
   browser = await launch({ width: W, height: H });
-  page = await openApp(browser, `http://localhost:5173/?render&q=${quality}&scale=1`, { width: W, height: H });
-  await page.evaluate(() => { window.__lost = false; app.gl.canvas.addEventListener('webglcontextlost', () => { window.__lost = true; }); });
+  page = await openApp(browser, `http://localhost:5173/?render&q=${quality}&scale=1&engine=${engine}`, { width: W, height: H });
+  await page.evaluate(() => { window.__lost = false; app.gl?.canvas.addEventListener('webglcontextlost', () => { window.__lost = true; }); });
 }
 await openPage();
 try {
@@ -62,7 +64,8 @@ try {
     '-y', '-loglevel', 'error',
     '-f', 'rawvideo', '-pix_fmt', 'rgba', '-s', `${size[0]}x${size[1]}`, '-framerate', String(fps), '-i', '-',
     ...(args.noaudio ? [] : ['-ss', String(from), '-i', wavPath]),
-    '-vf', 'vflip', '-c:v', 'libx264', '-preset', 'slow', '-crf', crf, '-pix_fmt', 'yuv420p', '-profile:v', 'high',
+    // GL rows are bottom-up, the WebGPU canvas read top-down
+    ...(engine === 'gl' ? ['-vf', 'vflip'] : []), '-c:v', 'libx264', '-preset', 'slow', '-crf', crf, '-pix_fmt', 'yuv420p', '-profile:v', 'high',
     '-color_primaries', 'bt709', '-color_trc', 'bt709', '-colorspace', 'bt709',
     '-x264-params', 'aq-mode=3:deblock=-1,-1', '-tune', 'film',
     ...(args.noaudio ? [] : ['-af', 'alimiter=limit=0.84:attack=3:release=60:level=disabled', '-c:a', 'aac', '-b:a', '256k', '-shortest']),
@@ -70,9 +73,9 @@ try {
   ], { stdio: ['pipe', 'inherit', 'inherit'] });
 
   // warm-up: settle foam history, cloud accumulation and camera filters before the first frame
-  const warmUp = (t1) => page.evaluate((t1, warm, fps) => {
+  const warmUp = (t1) => page.evaluate(async (t1, warm, fps) => {
     const dt = 1 / fps;
-    for (let t = t1 - warm; t < t1 - dt / 2; t += dt) { app.filmFrame(t, dt); app.gl.finish(); }
+    for (let t = t1 - warm; t < t1 - dt / 2; t += dt) { await app.filmFrame(t, dt); app.gl?.finish(); }
   }, t1, warm, fps);
   await warmUp(from);
 
@@ -81,17 +84,24 @@ try {
   let resumes = 0;
   for (let i = 0; i < total; i++) {
     const t = from + i / fps;
-    // raw RGBA (lossless, ~3x faster than PNG); rows are bottom-up, flipped by ffmpeg
-    const b64 = await page.evaluate((t, dt) => {
-      app.filmFrame(t, dt);
+    // raw RGBA (lossless, ~3x faster than PNG); GL rows are bottom-up, flipped by ffmpeg
+    const b64 = await page.evaluate(async (t, dt) => {
+      await app.filmFrame(t, dt);
       const gl = app.gl;
-      const px = (window.__px ||= new Uint8Array(app.w * app.h * 4));
-      px.fill(0);
-      gl.readPixels(0, 0, app.w, app.h, gl.RGBA, gl.UNSIGNED_BYTE, px);
+      let px, lost;
+      if (gl) {
+        px = (window.__px ||= new Uint8Array(app.w * app.h * 4));
+        px.fill(0);
+        gl.readPixels(0, 0, app.w, app.h, gl.RGBA, gl.UNSIGNED_BYTE, px);
+        lost = window.__lost || gl.isContextLost();
+      } else {
+        px = await app.pixels(); // started in the task of the frame
+        lost = window.engine.errors.length > 0;
+      }
       // the film is never black outside its fades: a black frame means the GPU dropped the context
       let peak = 0;
       for (let j = 0; j < px.length; j += 4 * 997) peak = Math.max(peak, px[j], px[j + 1], px[j + 2]);
-      if (window.__lost || gl.isContextLost() || (app.fade > 0.05 && peak < 4)) return null;
+      if (lost || (app.fade > 0.05 && peak < 4)) return null;
       let s = '';
       for (let j = 0; j < px.length; j += 0x8000) s += String.fromCharCode.apply(null, px.subarray(j, j + 0x8000));
       return btoa(s);

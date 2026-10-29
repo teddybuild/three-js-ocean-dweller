@@ -48,7 +48,13 @@ How the port is built and checked. Decision: `docs/adr/0001-three-webgpu-port.md
   `centroidVarying` (`tsl-util.ts`), GL's `centroid`: three's `varyingProperty` takes no interpolation, so the helper
   sets it on the builder's varying, which WGSL emits as `@interpolate(perspective, centroid)`.
 - Audio (`src/three/main.ts` `audio`): GL's live `audio` object around the shared `src/audio/audio.js`, fed
-  `lightning.events` for thunder. No UI here: the first click or key starts the AudioContext, M mutes.
+  `lightning.events` for thunder. The shared UI's sound button and M key start and mute it.
+- App shell (`src/three/main.ts` `app` = `window.app`): the part of GL's `App` that `src/ui.js` and `render/` use
+  (`cam`, `weather`, `lightning`, `stats`, `time`, `w`/`h`, `fade`, `filmFrame`, `warmSea`, `filmAudio`). Live: the
+  shared UI, drag/wheel camera, `?scale` and GL's dynamic resolution (0.5 to the device ratio, 1.5 max).
+  `filmFrame` and `warmSea` are async; `pixels()` copies the canvas texture (COPY_SRC) to a buffer, because a 2D
+  `drawImage` of the WebGPU canvas reads black in headless Chrome. The soundtrack is `filmAudio()` in `src/film.js`,
+  shared by both engines. Not ported: `measureFoam` (debug).
 
 ## Checks
 

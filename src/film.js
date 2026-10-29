@@ -3,6 +3,9 @@
 // then a low, dark deck), then gale, downpour and lightning.
 // III: night after the storm, a moonlit swell, the storm bank flickering silently on the horizon.
 
+import { renderSoundtrack, encodeWav } from './audio/audio.js';
+import { smoothstep } from './math.js';
+
 const smooth = (t) => t * t * (3 - 2 * t);
 
 const ACT1 = {
@@ -96,3 +99,19 @@ export const film = {
   },
   strikes: STRIKES,
 };
+
+// Film soundtrack (OfflineAudioContext), returned as a WAV ArrayBuffer. Shared by both engines' app.filmAudio().
+export async function filmAudio() {
+  const paramsAt = (t) => {
+    const w = film.weatherAt(t);
+    const hs = 0.21 * w.wind * w.wind / 9.81 + w.swellHs * 0.5;
+    const mc = w.front > 0.5 ? smoothstep(-w.frontWidth, w.frontWidth, -w.frontDist) : 0;
+    return { wind: w.wind, rain: w.rain + ((w.sRain ?? 0) - w.rain) * mc, hs, tp: (2 * Math.PI * Math.max(w.wind, 1)) / (0.855 * 9.81), foam: Math.min(2 * 3.84e-6 * Math.pow(w.wind, 3.41), 0.4) };
+  };
+  // a strike is heard only within its own act (the cut moves on in time)
+  const strikes = film.strikes.map((s) => ({ t: s.t, dist: s.dist, power: s.power, until: (film.acts.find((a) => a.start > s.t)?.start ?? Infinity) + 1.2 }));
+  // sound follows the picture fades, but only dips (not silence) at the cut between acts
+  const gainAt = (t) => Math.max(film.fadeAt(t), film.acts.slice(1).some((a) => Math.abs(t - a.start) < 1) ? 0.35 : 0);
+  const buf = await renderSoundtrack(film.duration, paramsAt, strikes, 48000, gainAt);
+  return encodeWav(buf);
+}

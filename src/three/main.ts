@@ -17,7 +17,9 @@ import { Lightning } from './lightning';
 import { atmoU } from './atmosphere';
 import { Weather } from '../weather.js';
 import { AudioEngine } from '../audio/audio.js';
-import { smoothstep } from '../math.js';
+import { UI, UI_CSS } from '../ui.js';
+import { film, filmAudio } from '../film.js';
+import { smoothstep, clamp } from '../math.js';
 
 const params = new URLSearchParams(location.search);
 const RENDER_MODE = params.has('render');
@@ -88,7 +90,8 @@ async function start() {
   const ai = device.adapterInfo as GPUAdapterInfo & { isFallbackAdapter?: boolean };
   const scopes: GPUErrorFilter[] = ['validation', 'out-of-memory', 'internal'];
 
-  renderer.setPixelRatio(RENDER_MODE ? 1 : Math.min(window.devicePixelRatio || 1, 1.5));
+  // drawing-buffer scale, as src/main.js: ?scale, else the device ratio up to 1.5 (live adjusts it to the frame time)
+  let scale = Number(params.get('scale') || (RENDER_MODE ? 1 : Math.min(window.devicePixelRatio || 1, 1.5)));
   renderer.setSize(window.innerWidth, window.innerHeight, false);
 
   // camera: same URL keys, defaults and clip planes as src/main.js (eye height h, yaw/pitch in degrees, vertical
@@ -96,6 +99,7 @@ async function start() {
   const cam = {
     eye: Number(params.get('h') || 3), base: [0, 0], heave: 0, roll: 0, tilt: 0, float: params.get('float') !== '0',
     yaw: (Number(params.get('yaw') || 200) * Math.PI) / 180, pitch: (Number(params.get('pitch') ?? 1.5) * Math.PI) / 180,
+    fov: (Number(params.get('fov') || 42) * Math.PI) / 180, pos: [0, 0, 0],
   };
   const camera = new THREE.PerspectiveCamera(Number(params.get('fov') || 42), window.innerWidth / window.innerHeight, 0.2, 80000);
   camera.position.set(0, cam.eye, 0);
@@ -141,6 +145,9 @@ async function start() {
     cam.tilt += (Math.atan(along) * 0.55 * f - cam.tilt) * k;
     cam.roll += (Math.atan(across) * 0.55 * f - cam.roll) * k;
     camera.position.set(cam.base[0] + r.dx * f * 0.8, cam.eye + cam.heave, cam.base[1] + r.dz * f * 0.8);
+    cam.pos = camera.position.toArray();
+    const fovDeg = (cam.fov * 180) / Math.PI;
+    if (camera.fov !== fovDeg) { camera.fov = fovDeg; camera.updateProjectionMatrix(); }
     const pitch = cam.pitch + cam.tilt;
     const fwd = new THREE.Vector3(Math.cos(pitch) * Math.cos(cam.yaw), Math.sin(pitch), Math.cos(pitch) * Math.sin(cam.yaw));
     const right0 = fwd.clone().cross(camera.up.set(0, 1, 0)).normalize();
@@ -152,7 +159,7 @@ async function start() {
   };
   const mixv = (a: number[], b: number[], t: number) => a.map((x, i) => x + (b[i] - x) * t);
   // per frame, as the top of src/main.js frame(): ocean, camera, light source, LUTs, squall front, clouds, environment
-  const updateWorld = async (dt: number): Promise<PostOptions> => {
+  const updateSea = (dt: number) => {
     weather.update(dt);
     const S = weather.state;
     ocean.lambda = Math.max(S.choppy, weather.choppyFor(S.wind));
@@ -161,6 +168,11 @@ async function start() {
     ocean.drift = [Math.cos(wdr) * 0.035 * S.wind, Math.sin(wdr) * 0.035 * S.wind];
     ocean.setSpectrum(weather.spectrum());
     ocean.update(elapsed, dt, weather.foam());
+  };
+  const updateWorld = async (dt: number): Promise<PostOptions> => {
+    updateSea(dt);
+    const S = weather.state;
+    const wdr = (S.windDir * Math.PI) / 180;
     await updateCamera(dt);
     const night = weather.time.sunElev < -7;
     const sun = night ? weather.moonDir() : weather.sunDir();
@@ -305,7 +317,7 @@ async function start() {
     return {
       time: elapsed, bloom: 0.012 + 0.006 * backlit + 0.01 * (night ? 1 : 0),
       exposureBias: Number(params.get('ev') || 0) - 0.7 * backlit - 1.0 * L.dark * L.dark * (0.4 + 0.6 * L.rain) + 0.8 * (1 - smoothstep(0.2, 0.4, L.clouds)) * smoothstep(35, 50, weather.time.sunElev) + 0.1 * smoothstep(0.8, 0.95, L.clouds) * (1 - smoothstep(0.4, 0.6, L.dark)) * (1 - L.rain),
-      incident: 0.65 * (1 - backlit) * (1 - 0.7 * stormView), fade: 1,
+      incident: 0.65 * (1 - backlit) * (1 - 0.7 * stormView), fade: app.fade,
       whiteBalance: params.has('wb') ? Number(params.get('wb')) : (0.1 * smoothstep(0.25, 0.6, L.clouds) + 0.35 * smoothstep(0.8, 0.95, L.clouds)) * (1 - backlit) * (night ? 0 : 1),
       night: night ? 1 : 0,
       look: params.has('look') ? params.get('look')!.split(',').map(Number) : night ? [1.35, 0.4, 1.0, 0.004] : mixv([1.5, 0.4, 1.0, 0.004], [1.6, 0.36, 0.95, 0.03], stormView),
@@ -325,6 +337,7 @@ async function start() {
   const vis = (texture as any)(clouds.shadow, (vec2 as any)(0.5)).level(0).r;
   const post = new PostChain(renderer, { incidentE: sky.sunIlluminance().mul(vis).mul(max(atmoU.sun.y, 0)).add(sky.skyIrradiance()) });
   const resize = () => {
+    renderer.setPixelRatio(scale);
     renderer.setSize(window.innerWidth, window.innerHeight, false);
     const size = renderer.getDrawingBufferSize(new THREE.Vector2());
     hdr.setSize(size.x, size.y);
@@ -356,6 +369,88 @@ async function start() {
     await device.queue.onSubmittedWorkDone();
     await Promise.all(pending.splice(0));
   };
+  // one mip level (and z slice) of a texture as packed rows in texel order (y = 0 first): copyTextureToBuffer pads
+  // rows to 256 bytes and three does not strip them. The copy is encoded before the first await.
+  const readRows = async (gpuTex: GPUTexture, bpt: number, level = 0, z = 0) => {
+    const G = globalThis as any;
+    const w = Math.max(gpuTex.width >> level, 1), h = Math.max(gpuTex.height >> level, 1);
+    const row = Math.ceil((w * bpt) / 256) * 256;
+    const buf = device.createBuffer({ size: row * h, usage: G.GPUBufferUsage.COPY_DST | G.GPUBufferUsage.MAP_READ });
+    const enc = device.createCommandEncoder();
+    enc.copyTextureToBuffer({ texture: gpuTex, mipLevel: level, origin: { x: 0, y: 0, z } }, { buffer: buf, bytesPerRow: row }, { width: w, height: h });
+    device.queue.submit([enc.finish()]);
+    await buf.mapAsync(G.GPUMapMode.READ);
+    const raw = new Uint8Array(buf.getMappedRange()), out = new Uint8Array(w * h * bpt);
+    for (let y = 0; y < h; y++) out.set(raw.subarray(y * row, y * row + w * bpt), y * w * bpt);
+    buf.destroy();
+    return out;
+  };
+
+  // window.app: the part of src/main.js's App that the shared UI (src/ui.js) and the film renderer (render/) use
+  let filmAct: number | undefined, filmPrevT: number | undefined;
+  const app = {
+    canvas, cam, weather, lightning, fade: 1, filmAudio,
+    get stats() { return ocean.stats; },
+    get time() { return elapsed; },
+    get w() { return canvas.width; },
+    get h() { return canvas.height; },
+    // the sea alone for `seconds` (foam history before a shot), as src/main.js warmSea
+    async warmSea(seconds: number, dt = 1 / 30) {
+      for (let i = 0; i < Math.round(seconds / dt); i++) {
+        elapsed += dt;
+        updateSea(dt);
+        if (i % 30 === 29) await settle();
+      }
+    },
+    // the film at time t (src/film.js), as src/main.js filmFrame; hold samples the timeline there while the clock runs on t
+    async filmFrame(t: number, dt: number, hold?: number) {
+      const tl = Math.max(hold ?? t, 0);
+      const act = film.actAt(tl);
+      if (filmAct !== undefined && act !== filmAct) {
+        // new shot: settle foam, clouds and camera filters off-screen (during the dip to black)
+        filmAct = act;
+        const t0 = film.acts[act].start;
+        await app.filmFrame(t0 - 28, dt, t0);
+        await app.warmSea(25, dt);
+        for (let w = t0 - 3; w < t0 - dt / 2; w += dt) await app.filmFrame(w, dt, t0);
+      }
+      filmAct = act;
+      app.fade = film.fadeAt(tl);
+      const w = film.weatherAt(tl) as Record<string, number>;
+      // debug: ?fo=clouds:0.1,haze:1 overrides timeline values
+      if (params.has('fo')) for (const kv of params.get('fo')!.split(',')) { const [k, v] = kv.split(':'); w[k] = Number(v); }
+      const W = weather as any;
+      for (const k in w) {
+        if (k in W.time) { W.time[k] = w[k]; W.timeTarget[k] = w[k]; }
+        else { W.state[k] = w[k]; W.target[k] = w[k]; }
+      }
+      W.transition = 1e-6;
+      const c = film.cameraAt(tl) as any;
+      cam.yaw = (c.yaw * Math.PI) / 180;
+      cam.pitch = (c.pitch * Math.PI) / 180;
+      cam.eye = c.eye;
+      cam.fov = (c.fov * Math.PI) / 180;
+      // strikes fire once when the timeline passes them
+      const prev = filmPrevT ?? t - dt;
+      if (hold === undefined) filmPrevT = t;
+      for (const s of film.strikes) {
+        if (hold === undefined && s.t > prev && s.t <= t) lightning.trigger(cam, { dist: s.dist, az: cam.yaw + s.rel, ground: s.ground, base: W.state.cloudBase });
+      }
+      elapsed = t - dt;
+      await settle(); // the previous frame drains first (GL's gl.finish), so a read after this frame stays in its task
+      await frame(dt);
+    },
+    // the canvas as top-down RGBA rows. Call it in the task of the frame: the canvas texture expires after it (a 2D
+    // drawImage of the WebGPU canvas reads black in headless Chrome, so the texture is copied)
+    async pixels() {
+      const tex = (canvas.getContext('webgpu') as GPUCanvasContext).getCurrentTexture();
+      const px = await readRows(tex, 4);
+      if (tex.format.startsWith('bgra')) for (let i = 0; i < px.length; i += 4) [px[i], px[i + 2]] = [px[i + 2], px[i]];
+      return px;
+    },
+  };
+  window.app = app;
+
   const engine: Engine = {
     name: 'three',
     async step(n, dt) { for (let i = 0; i < n; i++) await frame(dt); await settle(); },
@@ -380,23 +475,9 @@ async function start() {
     async readTexture(tex: THREE.Texture, level = 0, z = 0) {
       const { texture: gpuTex, textureDescriptorGPU: desc } = backend.get(tex);
       if (desc.format !== 'rgba16float' && desc.format !== 'rgba8unorm') throw new Error(`readTexture: format ${desc.format}`);
-      const G = globalThis as any, half = desc.format === 'rgba16float', bpt = half ? 8 : 4;
-      const w = Math.max(gpuTex.width >> level, 1), h = Math.max(gpuTex.height >> level, 1);
-      const row = Math.ceil((w * bpt) / 256) * 256;
-      const buf = device.createBuffer({ size: row * h, usage: G.GPUBufferUsage.COPY_DST | G.GPUBufferUsage.MAP_READ });
-      const enc = device.createCommandEncoder();
-      enc.copyTextureToBuffer({ texture: gpuTex, mipLevel: level, origin: { x: 0, y: 0, z } }, { buffer: buf, bytesPerRow: row }, { width: w, height: h });
-      device.queue.submit([enc.finish()]);
-      await buf.mapAsync(G.GPUMapMode.READ);
-      const raw = new Uint8Array(buf.getMappedRange());
-      const out = new Float32Array(w * h * 4);
-      for (let y = 0; y < h; y++) {
-        const r = raw.subarray(y * row, y * row + w * bpt);
-        const v = half ? new G.Float16Array(r.buffer, r.byteOffset, w * 4) : r;
-        for (let i = 0; i < w * 4; i++) out[y * w * 4 + i] = half ? v[i] : v[i] / 255;
-      }
-      buf.destroy();
-      return out;
+      const half = desc.format === 'rgba16float';
+      const raw = await readRows(gpuTex, half ? 8 : 4, level, z);
+      return Float32Array.from(half ? new (globalThis as any).Float16Array(raw.buffer) : raw, (v: number) => (half ? v : v / 255));
     },
     // runs fn inside the same error scopes as a frame; errors land in engine.errors
     async scoped<T>(fn: () => Promise<T>) {
@@ -408,18 +489,37 @@ async function start() {
     },
   };
   if (!RENDER_MODE) {
-    addEventListener('pointerdown', () => { if (!audio.ctx) audio.enable(true); });
-    addEventListener('keydown', (e) => {
-      if (e.key.toLowerCase() === 'm') audio.enable(audio.ctx?.state !== 'running');
-      else if (!audio.ctx) audio.enable(true);
+    const style = document.createElement('style');
+    style.textContent = UI_CSS;
+    document.head.appendChild(style);
+    new UI(app, audio); // presets, sliders, sound (M), strike (L), night (N)
+    // drag to look, wheel for eye height (src/main.js bindInput)
+    let drag: { x: number; y: number } | null = null;
+    canvas.addEventListener('pointerdown', (e) => { drag = { x: e.clientX, y: e.clientY }; canvas.setPointerCapture(e.pointerId); });
+    canvas.addEventListener('pointermove', (e) => {
+      if (!drag) return;
+      const k = 0.0035 * (cam.fov / 0.73);
+      cam.yaw += (e.clientX - drag.x) * k;
+      cam.pitch = clamp(cam.pitch - (e.clientY - drag.y) * k, -1.2, 1.2);
+      drag = { x: e.clientX, y: e.clientY };
     });
-    let last = performance.now();
-    let busy = false;
+    canvas.addEventListener('pointerup', () => { drag = null; });
+    canvas.addEventListener('wheel', (e) => { cam.eye = clamp(cam.eye * Math.exp(e.deltaY * 0.001), 1.5, 400); }, { passive: true });
+    // dynamic resolution, as src/main.js: keep the frame time near 30 fps on slow GPUs, sharpen on fast ones. A frame
+    // still running skips the rAF tick instead of overlapping it.
+    let last = performance.now(), busy = false, avg = 1 / 60, settleT = 0;
+    const maxScale = params.has('scale') ? scale : Math.min(window.devicePixelRatio || 1, 1.5);
     renderer.setAnimationLoop(async (now: number) => {
       if (busy) return;
       busy = true;
-      try { await frame(Math.min((now - last) / 1000, 0.1)); } finally { busy = false; }
+      const dt = Math.min((now - last) / 1000, 0.1);
       last = now;
+      try { await frame(dt); } finally { busy = false; }
+      avg += (dt - avg) * 0.05;
+      if (!params.has('scale') && (settleT += dt) > 2.5 && !document.hidden) {
+        const next = avg > 1 / 26 ? Math.max(scale * 0.88, 0.5) : avg < 1 / 50 ? Math.min(scale * 1.08, maxScale) : scale;
+        if (Math.abs(next - scale) > 0.02) { scale = next; resize(); settleT = 0; }
+      }
     });
   }
 }

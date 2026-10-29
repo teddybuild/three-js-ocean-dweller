@@ -5,6 +5,6 @@ over this page. New item: a file here plus a line below. Finished: delete its fi
 
 ## Open
 
-1. three.js WebGPU port - app shell (both end-of-port reviews, P1): UI, drag/wheel camera, `?scale` + dynamic
-   resolution, film hooks for `render/`. Then the upstream sky edge at x ~300 in rain/storm; `docs/systems/three-port.md`.
+1. three.js WebGPU port - upstream sky edge at x ~300 in rain/storm (both engines); a full 60 s film render with
+   `--engine three` (only 16-18 s rendered so far); `docs/systems/three-port.md`.
 2. [three-js-boat.md](three-js-boat.md) - parked (ruling 2026-10-29).
