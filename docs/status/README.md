@@ -11,7 +11,7 @@ Where the project is right now. Read this first, then the newest handoff.
 
 ## Right now (2026-10-29)
 
-three.js WebGPU port: `port-m0`..`port-m5` tagged and pushed; every effect ported, plus MSAA, centroid and thunder audio (all 10 diff scenes 37.3-49.8 dB, `tools/live-three.mjs` ok). Next: the Codex + agy review of the whole port. Spec: `docs/systems/three-port.md`.
+three.js WebGPU port: `port-m0`..`port-m5` tagged and pushed; every effect ported, plus MSAA, centroid and thunder audio (all 10 diff scenes 37.3-49.8 dB, `tools/live-three.mjs` ok). Codex + agy reviewed the whole port (no P0, fixes in). Next: the app shell (UI, camera input, `?scale`, film hooks). Spec: `docs/systems/three-port.md`.
 
 ## How to update
 
