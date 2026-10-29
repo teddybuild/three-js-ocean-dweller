@@ -2,7 +2,7 @@
 
 Where the project is right now. Read this first, then the newest handoff.
 
-- **Newest handoff:** [handoffs/2026-10-29-1840.md](handoffs/2026-10-29-1840.md)
+- **Newest handoff:** [handoffs/2026-10-29-1843.md](handoffs/2026-10-29-1843.md)
 - [open/](open/README.md): open items and design questions, in priority order.
 - [CHANGELOG.md](CHANGELOG.md): every shipped change, newest first, one line each with its commits.
 - [lessons.md](lessons.md) and [rulings.md](rulings.md): traps past sessions hit, and the owner's standing calls. Both
