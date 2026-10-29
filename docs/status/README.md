@@ -2,7 +2,7 @@
 
 Where the project is right now. Read this first, then the newest handoff.
 
-- **Newest handoff:** none yet.
+- **Newest handoff:** [handoffs/2026-10-29-1613.md](handoffs/2026-10-29-1613.md)
 - [open/](open/README.md): open items and design questions, in priority order.
 - [CHANGELOG.md](CHANGELOG.md): every shipped change, newest first, one line each with its commits.
 - [lessons.md](lessons.md) and [rulings.md](rulings.md): traps past sessions hit, and the owner's standing calls. Both
@@ -11,8 +11,9 @@ Where the project is right now. Read this first, then the newest handoff.
 
 ## Right now (2026-10-29)
 
-three.js WebGPU port, milestone 0 done: `?engine=three` skeleton, `tools/diff.mjs`, hardware WebGPU in headless
-Chrome. Next: milestone 1, open-water's FFT as TSL compute (`docs/systems/three-port.md`).
+three.js WebGPU port, milestone 0: harness committed (`8a909a1`, `4084589`); round-2 review fixes uncommitted and
+not yet run in a browser. Not tagged, 5 commits unpushed. Next: verify the fixes, rerun Codex + agy, tag `port-m0`,
+then milestone 1 (FFT as TSL compute). Spec: `docs/systems/three-port.md`.
 
 ## How to update
 
