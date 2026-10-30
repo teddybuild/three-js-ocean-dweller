@@ -80,7 +80,7 @@ Fill one row per GPU resource. The GL column comes from the 2026-10-29 inventory
 | Resource | GL (archive/gl/src/) | three | Owner | Notes |
 |---|---|---|---|---|
 | HDR scene | MSTarget rgba16f/r11g11b10f, MSAA, blit resolve | half-float RenderTarget, 4x MSAA (`?msaa`), resolved by the pass | `src/three/main.ts` | M2 |
-| Tone map | AgX in `src/fx/post.js` | same AgX + look in TSL | `src/three/post.ts` | M2 |
+| Tone map | AgX in `fx/post.js` | same AgX + look in TSL | `src/three/post.ts` | M2 |
 | Noise, h0 | rgba32f per cascade | vec4 f32 buffer per cascade | `src/three/ocean.ts` | M1; rng(1337), same draw order |
 | FFT ping-pong | 2 MRT pairs rgba32f per size | 2 x 2 vec4 buffers per size | `src/three/ocean.ts` | M1; shared by cascades of one size, result in A |
 | disp + foam, slope | rgba16f x2, mips | vec4 f32 buffers x2 per cascade, copied to half-float textures with mips | `src/three/ocean.ts` | M1, M3a |
