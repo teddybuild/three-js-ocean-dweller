@@ -10,7 +10,16 @@ grouped by topic, merged, never appended blindly. A lesson that can be a check b
 - three's NodeFrame only advances in its own rAF loop: fixed steps must stop `renderer._animation` and call `_nodes.nodeFrame.update()` per frame, or passes update once per capture.
 - three catches pipeline validation errors in its own error scopes and only logs them: read them via `THREE.setConsoleFunction`.
 - A 2D `drawImage` of the WebGPU canvas (also OffscreenCanvas) reads black in headless Chrome while `toDataURL` works: copy `getCurrentTexture()` (COPY_SRC) to a buffer in the frame's task (`app.pixels()`).
+- `node tools/diff.mjs` with no scene runs only breeze: name all 10 (`breeze sea calm squall clear rain storm night stormfloat rt`), or a scene's PNG is stale. `page.screenshot` of the WebGPU canvas is black in headless too: shoot GL for looks, `diff.mjs` for three.
+- Close an open item only on a check of the scene it was reported in: the 60 s film never frames the storm sky edge, so a film check "closed" it wrongly.
 - `git add a b <path already git rm'd>` aborts the whole add: the commit then holds only the staged rm. Check `git show --stat` before pushing.
+
+## Look and shading
+
+- `fract(sin(x) * 43758.5453)` hashes break value noise at lattice indices in the thousands (one ULP gives a corner two values): a straight world-anchored seam. Use the sine-free hash (`fogHash` in `src/sky/atmosphere.js`).
+- At the usual camera angles the sea is sky reflection: scaling water-leaving `rrs` (even to 0) moved it 0-1/255. Darken with `SEA_GRADE` (`src/ocean/water.js`).
+- Gale foam rows (`uFoamStretch`) hide a saturated foam density: stretch off turns the sea white. Tune coverage with `Weather.foam()` decay, not the stretch.
+- Find a world-anchored artifact by elimination: turn one term off per shot (`tools/shot.mjs`), measure column means; guesses at the cause cost two rounds here.
 
 ## Porting to TSL/WGSL (Codex, agy, web-ocean-3d)
 
