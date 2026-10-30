@@ -109,7 +109,7 @@ export class Rain {
     exposure: uniform(1 / 60),                   // shutter time (s)
     lambda: uniform(4.1),                        // Marshall-Palmer slope (1/mm)
     count: uniform(0),                           // active fraction
-    gain: uniform(13),
+    gain: uniform(30),
     // splashes
     radius: uniform(7),
     splashCount: uniform(0),
@@ -118,7 +118,7 @@ export class Rain {
   private splashGeo: THREE.InstancedBufferGeometry;
   private streakGeo: THREE.InstancedBufferGeometry;
 
-  constructor(_renderer: THREE.WebGPURenderer, sky: SkyCompute, inputs: RainInputs, { drops = 120000, splashes = 40000 } = {}) {
+  constructor(_renderer: THREE.WebGPURenderer, sky: SkyCompute, inputs: RainInputs, { drops = 600000, splashes = 40000 } = {}) {
     this.drops = drops;
     this.splashes = splashes;
     // GL constructor order: drop seeds rng(11), splash seeds rng(23)
@@ -288,7 +288,7 @@ export class Rain {
     setV2(U.drift, u.drift || [0, 0]);
     U.exposure.value = u.exposure;
     U.count.value = Math.min(Math.sqrt(u.rain) * 1.05, 1);
-    U.gain.value = u.gain ?? 13;
+    U.gain.value = u.gain ?? 30;
     // instances past the active quantile are culled in the shader anyway (w >= i / n): skip drawing them
     this.splashGeo.instanceCount = Math.min(this.splashes, Math.ceil(U.splashCount.value * this.splashes) + 1);
     this.streakGeo.instanceCount = Math.min(this.drops, Math.ceil(U.count.value * this.drops) + 1);

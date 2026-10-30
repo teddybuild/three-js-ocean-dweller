@@ -154,7 +154,9 @@ void main() {
 }`;
 
 export class Rain {
-  constructor(gl, { drops = 120000, splashes = 40000 } = {}) {
+  // drops: 600k in the 36 x 22 x 36 m box (~21 per m^3; was 120k: "denser... if i crank it up i barely see anything",
+  // the owner, 2026-10-29); src/three/rain.ts matches
+  constructor(gl, { drops = 600000, splashes = 40000 } = {}) {
     this.gl = gl;
     this.drops = drops;
     this.splashes = splashes;
@@ -203,7 +205,7 @@ export class Rain {
     this.pStreak.use({
       ...u.skyU, uViewProj: u.viewProj, uCamPos: u.camPos, uBox: [36, 22, 36], uTime: u.time,
       uWind: u.wind, uDrift: u.drift || [0, 0], uExposure: u.exposure, uLambda: lambda, uCount: Math.min(Math.sqrt(u.rain) * 1.05, 1),
-      uViewport: u.viewport, uPixelAngle: u.pixelAngle, uEnv: u.env, uFlash: u.flash, uGain: u.gain ?? 13,
+      uViewport: u.viewport, uPixelAngle: u.pixelAngle, uEnv: u.env, uFlash: u.flash, uGain: u.gain ?? 30,
     });
     gl.bindVertexArray(this.vaoDrops);
     gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, 4, this.drops);

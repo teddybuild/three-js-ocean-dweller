@@ -3,6 +3,7 @@
 Every shipped change, newest first: one line each, with its commits. Add a line when a change lands;
 the why and the numbers go in the commit message and the day's `docs/log/` file.
 
+- 2026-10-29 19:52 Denser rain: 600k streak drops (was 120k), gain 30 (was 13), both engines.
 - 2026-10-29 19:35 Less gale foam: residual decay 0.1 / 0.15 1/s at 18 / 24 m/s (was 0.058 / 0.05); 26 m/s coverage 40% -> 14%. `d5c22e4`
 - 2026-10-29 19:23 Sky edge fixed: sine-free `fogHash` (Hoskins, MIT) in both engines; storm step at x 292 -6.6 -> 0. `a0079a9`
 - 2026-10-29 19:15 Darker sea: `SEA_GRADE` 0.7 on reflected sky + body, both engines (glints, foam full); sea 13-39% darker. `dedac7b`
