@@ -1,4 +1,4 @@
-// open-water's volumetric clouds (src/sky/clouds.js) in TSL: the tileable Perlin-Worley shape and Worley detail
+// open-water's volumetric clouds (archive/gl/src/sky/clouds.js) in TSL: the tileable Perlin-Worley shape and Worley detail
 // volumes and the weather map (compute kernels; the 3D mips are box-filtered level by level, since three only
 // generates 2D mips), the Nubis-style raymarch (CLOUD_GLSL), the cloud-shadow map, the reflection-probe clouds and
 // the screen pass with temporal reprojection. Every pass is a compute kernel writing texel (x, y) of GL's target at

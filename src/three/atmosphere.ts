@@ -1,4 +1,4 @@
-// open-water's atmosphere (src/sky/atmosphere.js, after Hillaire 2020) as TSL compute: transmittance,
+// open-water's atmosphere (archive/gl/src/sky/atmosphere.js, after Hillaire 2020) as TSL compute: transmittance,
 // multiple-scattering, sky-view and sea-level aerial-perspective LUTs, written texel by texel into half-float storage
 // textures (row y is v = (y + 0.5) / h, as in GL), plus the lookups the sky, water and clouds sample them with.
 // Units: kilometres; radiance relative to a solar illuminance of 1.

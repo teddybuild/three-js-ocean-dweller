@@ -63,11 +63,11 @@ async function start() {
   const ai = device.adapterInfo as GPUAdapterInfo & { isFallbackAdapter?: boolean };
   const scopes: GPUErrorFilter[] = ['validation', 'out-of-memory', 'internal'];
 
-  // drawing-buffer scale, as src/main.js: ?scale, else the device ratio up to 1.5 (live adjusts it to the frame time)
+  // drawing-buffer scale, as archive/gl/src/main.js: ?scale, else the device ratio up to 1.5 (live adjusts it to the frame time)
   let scale = Number(params.get('scale') || (RENDER_MODE ? 1 : Math.min(window.devicePixelRatio || 1, 1.5)));
   renderer.setSize(window.innerWidth, window.innerHeight, false);
 
-  // camera: same URL keys, defaults and clip planes as src/main.js (eye height h, yaw/pitch in degrees, vertical
+  // camera: same URL keys, defaults and clip planes as archive/gl/src/main.js (eye height h, yaw/pitch in degrees, vertical
   // fov). It rides the waves unless ?float=0 (updateCamera).
   const cam = {
     eye: Number(params.get('h') || 3), base: [0, 0], heave: 0, roll: 0, tilt: 0, float: params.get('float') !== '0',
@@ -77,15 +77,15 @@ async function start() {
   const camera = new THREE.PerspectiveCamera(Number(params.get('fov') || 42), window.innerWidth / window.innerHeight, 0.2, 80000);
   camera.position.set(0, cam.eye, 0);
 
-  // weather: same preset, URL keys and snap as src/main.js
+  // weather: same preset, URL keys and snap as archive/gl/src/main.js
   const weather = new Weather(params.get('preset') || 'breeze');
   if (params.has('elev')) weather.set('sunElev', Number(params.get('elev')));
   if (params.has('az')) weather.set('sunAz', Number(params.get('az')));
   for (const k of Object.keys(weather.target)) if (params.has(k)) weather.set(k, Number(params.get(k)));
   weather.snap();
-  // FFT sizes follow src/main.js: ?q, else 'high' in ?render and 'rt' live
+  // FFT sizes follow archive/gl/src/main.js: ?q, else 'high' in ?render and 'rt' live
   const q = params.get('q') || (RENDER_MODE ? 'high' : 'rt');
-  // src/main.js QUALITY, the cloud part (rt: a half-resolution, checkerboarded buffer)
+  // archive/gl/src/main.js QUALITY, the cloud part (rt: a half-resolution, checkerboarded buffer)
   const CQ = q === 'rt'
     ? { div: 2, detailFoot: 50, steps: 80, lightSteps: 5, lightDetail: 2, blend: 0.14, check: true, upSteps: 2 }
     : { div: 1, detailFoot: 25, steps: q === 'ultra' ? 128 : 96, lightSteps: 6, lightDetail: 3, blend: 0.08, check: false, upSteps: 4 };
@@ -99,13 +99,13 @@ async function start() {
   const water = new WaterMesh({ ...ocean.textures(), env: sky.env, sky, foamTex: foam.tex, shadow: clouds.shadow, shadowRect: clouds.shadowRect }, { angular: q === 'rt' ? 400 : 640 });
   const gustDrift = [0, 0];
   const probe = new OceanProbe(renderer, ocean.textures());
-  // weather effects drawn after the water (src/fx): lightning channel, spray, rain
+  // weather effects drawn after the water (archive/gl/src/fx): lightning channel, spray, rain
   const lightning = new Lightning(renderer);
   const spray = new Spray(renderer, sky, ocean.textures());
   const rain = new Rain(renderer, sky, ocean.textures());
   const rainDrift = [0, 0];
   let boltT = 1, forcedStrike = false;
-  // Floating camera, as src/main.js updateCamera + cameraMatrices: heave, pitch and roll with the sea (a small boat
+  // Floating camera, as archive/gl/src/main.js updateCamera + cameraMatrices: heave, pitch and roll with the sea (a small boat
   // responds to waves longer than itself, so the probe samples a mip level matching an ~8 m hull). ?render waits
   // for the probe (GL's sync readback); live uses the last finished one.
   // per-frame temporaries, reused (no allocation in the live loop)
@@ -133,7 +133,7 @@ async function start() {
     camera.updateMatrixWorld();
   };
   const mixv = (a: number[], b: number[], t: number) => a.map((x, i) => x + (b[i] - x) * t);
-  // per frame, as the top of src/main.js frame(): ocean, camera, light source, LUTs, squall front, clouds, environment
+  // per frame, as the top of archive/gl/src/main.js frame(): ocean, camera, light source, LUTs, squall front, clouds, environment
   const updateSea = (dt: number) => {
     weather.update(dt);
     const S = weather.state;
@@ -151,7 +151,7 @@ async function start() {
     await updateCamera(dt);
     const night = weather.time.sunElev < -7;
     const sun = night ? weather.moonDir() : weather.sunDir();
-    // the light source switched (sun <-> moon): temporal cloud history is meaningless now (as src/main.js)
+    // the light source switched (sun <-> moon): temporal cloud history is meaningless now (as archive/gl/src/main.js)
     if (wasNight !== undefined && wasNight !== night) clouds.reset = true;
     wasNight = night;
     atmoU.lightMag.value = night ? -12.7 : -26.74;
@@ -176,7 +176,7 @@ async function start() {
     };
     // fraction of direct sun reaching the haze below the clouds (a closed deck lets none through)
     atmoU.hazeSun.value = (1 - smoothstep(0.3, 0.9, L.clouds)) * (1 - 0.85 * L.dark) * 0.97 + 0.03 * (1 - L.dark) * (1 - smoothstep(0.8, 0.9, L.clouds));
-    // lightning: flash intensity drives cloud emission, sky/sea illumination and thunder (as src/main.js)
+    // lightning: flash intensity drives cloud emission, sky/sea illumination and thunder (as archive/gl/src/main.js)
     const lcam = { pos: cp, yaw: cam.yaw };
     if (params.has('strikeAt') && elapsed >= Number(params.get('strikeAt')) && !forcedStrike) {
       forcedStrike = true;
@@ -192,7 +192,7 @@ async function start() {
     fogU.flashFog.value.fromArray(flashRGB.map((x) => x * 0.25));
     const lv = vLight.set(lp[0] - cp.x, (night ? lp[1] * 0.3 : lp[1] * 0.5) - cp.y, lp[2] - cp.z);
     fogU.flashDir.value.copy(lv).normalize();
-    // rain and mist (as src/main.js fogU): rain extinction takes visibility from >20 km to ~1.5 km in a downpour
+    // rain and mist (as archive/gl/src/main.js fogU): rain extinction takes visibility from >20 km to ~1.5 km in a downpour
     const rainBeta = (r: number) => (r > 0.002 ? 0.336e-3 * Math.pow(r * 50, 0.63) : 0);
     const fogDensity = S.mist * 1.2e-3 + rainBeta(S.rain);
     const stormFog = S.sMist * 1.2e-3 + rainBeta(S.sRain);
@@ -249,7 +249,7 @@ async function start() {
     sky.showerMap.value = clouds.weatherMap;
     skyU.cloudsOn.value = 1;
     skyU.cloudSize.value.set(clouds.w, clouds.h);
-    // crepuscular rays in the haze below the cloud base (as src/main.js uShaft)
+    // crepuscular rays in the haze below the cloud base (as archive/gl/src/main.js uShaft)
     sky.shaftShadow.value = clouds.shadow;
     sky.cloudDepth.value = clouds.depth;
     skyU.shaftRect.value.copy(clouds.shadowRect.value);
@@ -257,7 +257,7 @@ async function start() {
     // water-leaving reflectance: deep blue, greyer with bubbles in a high wind, grey-green in rain
     skyU.envRrs.value.fromArray(mixv(mixv([0.0004, 0.003, 0.0085], [0.0012, 0.0026, 0.0022], 0.8 * smoothstep(5, 24, S.wind)), [0.0013, 0.0024, 0.0025], smoothstep(0.1, 0.8, L.rain)));
     sky.renderEnv();
-    // the water's uniforms, as src/main.js waterUniforms
+    // the water's uniforms, as archive/gl/src/main.js waterUniforms
     const st = ocean.stats, wu = water.u;
     gustDrift[0] += Math.cos(wdr) * S.wind * 0.9 * dt;
     gustDrift[1] += Math.sin(wdr) * S.wind * 0.9 * dt;
@@ -278,14 +278,14 @@ async function start() {
     wu.bolt.value.fromArray(boltWater);
     wu.windDir.value.set(Math.cos(wdr), Math.sin(wdr));
     wu.foamStretch.value = Math.min(Math.max((S.wind - 10) / 8, 0), 1);
-    // the effects (as src/main.js draws them)
+    // the effects (as archive/gl/src/main.js draws them)
     const fxU = { camPos: cp, pixelAngle: skyU.pixelAngle.value };
     lightning.draw({ ...fxU, fogDensity: 0, transmit: boltT, base: fOn ? Math.min(S.cloudBase, S.sBase) : S.cloudBase });
     spray.update({ ...fxU, anchor: cam.base, time: elapsed, wind: S.wind, windVec: [Math.cos(wdr) * S.wind, Math.sin(wdr) * S.wind], flash: flashRGB });
     rainDrift[0] += Math.cos(wdr) * S.wind * 0.8 * dt;
     rainDrift[1] += Math.sin(wdr) * S.wind * 0.8 * dt;
     rain.update({ ...fxU, rain: L.rain, time: elapsed, exposure: 1 / 60, wind: [Math.cos(wdr) * S.wind * 0.8, Math.sin(wdr) * S.wind * 0.8], drift: rainDrift, flash: flashRGB });
-    // post options, as src/main.js passes them
+    // post options, as archive/gl/src/main.js passes them
     // shooting into a low sun a photographer meters the bright sky (scene), not the incident light
     const fwd = camera.getWorldDirection(vView);
     const fh = Math.hypot(fwd.x, fwd.z) || 1;
@@ -365,7 +365,7 @@ async function start() {
     return out;
   };
 
-  // window.app: the part of src/main.js's App that the shared UI (src/ui.js) and the film renderer (render/) use
+  // window.app: the part of archive/gl/src/main.js's App that the shared UI (src/ui.js) and the film renderer (render/) use
   let filmAct: number | undefined, filmPrevT: number | undefined;
   const app = {
     canvas, cam, weather, lightning, fade: 1, filmAudio,
@@ -373,7 +373,7 @@ async function start() {
     get time() { return elapsed; },
     get w() { return canvas.width; },
     get h() { return canvas.height; },
-    // the sea alone for `seconds` (foam history before a shot), as src/main.js warmSea
+    // the sea alone for `seconds` (foam history before a shot), as archive/gl/src/main.js warmSea
     async warmSea(seconds: number, dt = 1 / 30) {
       for (let i = 0; i < Math.round(seconds / dt); i++) {
         elapsed += dt;
@@ -381,7 +381,7 @@ async function start() {
         if (i % 30 === 29) await settle();
       }
     },
-    // the film at time t (src/film.js), as src/main.js filmFrame; hold samples the timeline there while the clock runs on t
+    // the film at time t (src/film.js), as archive/gl/src/main.js filmFrame; hold samples the timeline there while the clock runs on t
     async filmFrame(t: number, dt: number, hold?: number) {
       const tl = Math.max(hold ?? t, 0);
       const act = film.actAt(tl);
@@ -472,7 +472,7 @@ async function start() {
     style.textContent = UI_CSS;
     document.head.appendChild(style);
     new UI(app, audio); // presets, sliders, sound (M), strike (L), night (N)
-    // drag to look, wheel for eye height (src/main.js bindInput)
+    // drag to look, wheel for eye height (archive/gl/src/main.js bindInput)
     let drag: { x: number; y: number } | null = null;
     canvas.addEventListener('pointerdown', (e) => { drag = { x: e.clientX, y: e.clientY }; canvas.setPointerCapture(e.pointerId); });
     canvas.addEventListener('pointermove', (e) => {
@@ -484,7 +484,7 @@ async function start() {
     });
     canvas.addEventListener('pointerup', () => { drag = null; });
     canvas.addEventListener('wheel', (e) => { cam.eye = clamp(cam.eye * Math.exp(e.deltaY * 0.001), 1.5, 400); }, { passive: true });
-    // dynamic resolution, as src/main.js: keep the frame time near 30 fps on slow GPUs, sharpen on fast ones. A frame
+    // dynamic resolution, as archive/gl/src/main.js: keep the frame time near 30 fps on slow GPUs, sharpen on fast ones. A frame
     // still running skips the rAF tick instead of overlapping it.
     let last = performance.now(), busy = false, avg = 1 / 60, settleT = 0;
     const maxScale = params.has('scale') ? scale : Math.min(window.devicePixelRatio || 1, 1.5);

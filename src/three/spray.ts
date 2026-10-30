@@ -1,4 +1,4 @@
-// open-water's spindrift (src/fx/spray.js) in TSL: above ~Beaufort 7 the wind tears spray off breaking crests.
+// open-water's spindrift (archive/gl/src/fx/spray.js) in TSL: above ~Beaufort 7 the wind tears spray off breaking crests.
 // Particles are seeded at random points around the camera and only live where the sea is actively breaking (dense
 // fresh foam on the crest); they rise, are carried downwind at ~0.6 U, spread and settle back. Instanced quads with
 // rng(41) seeds in GL's order; blending premultiplied, ONE / ONE_MINUS_SRC_ALPHA (helpers in ./rain).

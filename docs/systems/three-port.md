@@ -55,7 +55,7 @@ How the port is built and checked. Decision: `docs/adr/0001-three-webgpu-port.md
   shared UI, drag/wheel camera, `?scale` and GL's dynamic resolution (0.5 to the device ratio, 1.5 max).
   `filmFrame` and `warmSea` are async; `pixels()` copies the canvas texture (COPY_SRC) to a buffer, because a 2D
   `drawImage` of the WebGPU canvas reads black in headless Chrome. The soundtrack is `filmAudio()` in `src/film.js`,
-  shared by both engines. Not ported: `measureFoam` (debug).
+  shared. Not ported: `measureFoam` (debug).
 
 ## Checks
 
@@ -77,7 +77,7 @@ How the port is built and checked. Decision: `docs/adr/0001-three-webgpu-port.md
 
 Fill one row per GPU resource. The GL column comes from the 2026-10-29 inventory (GL now in `archive/gl/`).
 
-| Resource | GL (src/) | three | Owner | Notes |
+| Resource | GL (archive/gl/src/) | three | Owner | Notes |
 |---|---|---|---|---|
 | HDR scene | MSTarget rgba16f/r11g11b10f, MSAA, blit resolve | half-float RenderTarget, 4x MSAA (`?msaa`), resolved by the pass | `src/three/main.ts` | M2 |
 | Tone map | AgX in `src/fx/post.js` | same AgX + look in TSL | `src/three/post.ts` | M2 |

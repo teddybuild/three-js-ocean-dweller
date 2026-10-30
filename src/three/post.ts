@@ -1,4 +1,4 @@
-// open-water's HDR post chain (src/fx/post.js) as three.js WebGPU fullscreen passes: an energy-conserving bloom
+// open-water's HDR post chain (archive/gl/src/fx/post.js) as three.js WebGPU fullscreen passes: an energy-conserving bloom
 // pyramid (13-tap downsample with a Karis average on the first level, additive tent upsample), centre-weighted log
 // metering averaged by the mip chain of a 256x256 half-float target, eye adaptation ping-ponged between two 1x1
 // float targets, and the composite (exposure, night shift, vignette, AgX + look + EOTF, grain and dither), written

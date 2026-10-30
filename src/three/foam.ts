@@ -1,4 +1,4 @@
-// open-water's foam (src/ocean/foam.js) in TSL: FoamTexture's procedural, tileable 1024 x 1024 structure as a compute
+// open-water's foam (archive/gl/src/ocean/foam.js) in TSL: FoamTexture's procedural, tileable 1024 x 1024 structure as a compute
 // kernel (texel (x, y) is GL's vUv = ((x + 0.5) / size, (y + 0.5) / size)), and FOAM_GLSL's foamCoverage over TSL
 // nodes. R: marbling threshold, G: fine bubble texture, B: wind streak field (along +x = downwind), A: lace network.
 import * as THREE from 'three/webgpu';

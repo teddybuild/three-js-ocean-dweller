@@ -1,4 +1,4 @@
-// open-water's ocean probe (src/ocean/probe.js) as a TSL compute kernel: the sea surface under the camera (height,
+// open-water's ocean probe (archive/gl/src/ocean/probe.js) as a TSL compute kernel: the sea surface under the camera (height,
 // horizontal orbital displacement, mean slope over a boat-sized footprint). WebGPU has no synchronous readback, so
 // run() returns the last result and starts a new read; ?render awaits read() every frame instead (GL's sync path).
 import * as THREE from 'three/webgpu';

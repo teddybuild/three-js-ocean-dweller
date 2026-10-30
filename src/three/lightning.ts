@@ -1,4 +1,4 @@
-// open-water's lightning (src/fx/lightning.js): Poisson-timed strikes with multiple return strokes, a procedural
+// open-water's lightning (archive/gl/src/fx/lightning.js): Poisson-timed strikes with multiple return strokes, a procedural
 // branching channel (fractal midpoint displacement), in-cloud illumination and thunder scheduling (343 m/s). The CPU
 // logic (trigger, buildBolt, update) is GL's, line for line, on the same rng(7) stream, so both engines strike alike.
 // The channel is drawn as instanced quads, one per segment, additive (ONE / ONE); helpers in ./rain.

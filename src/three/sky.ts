@@ -1,4 +1,4 @@
-// open-water's sky (src/sky/sky.js) and the LUT lookups of SKY_LOOKUP_GLSL (src/sky/atmosphere.js) in TSL: sky
+// open-water's sky (archive/gl/src/sky/sky.js) and the LUT lookups of SKY_LOOKUP_GLSL (archive/gl/src/sky/atmosphere.js) in TSL: sky
 // radiance, transmittance, aerial perspective, irradiance, stars, the sun and moon disk, the equirectangular
 // reflection environment (with its mip chain) and its irradiance, both with the clouds composited (M4), and the
 // crepuscular rays (withShafts), and the rain, mist, squall curtains and spray haze in front of everything (applyFog).
@@ -16,7 +16,7 @@ const {
 
 const PI = Math.PI;
 const hg = (c: Node, g: number) => float((1 - g * g) / (4 * 3.14159)).div(pow(float(1 + g * g).sub(c.mul(2 * g)), 1.5));
-// sine-free hash, as GL fogHash (src/sky/atmosphere.js)
+// sine-free hash, as GL fogHash (archive/gl/src/sky/atmosphere.js)
 const fogHash = (x: Node) => { const p = fract(x.mul(0.1031)); const q = p.mul(p.add(33.33)); return fract(q.mul(q.add(q))); };
 function fogNoise(x0: Node) {
   const x = float(x0).toVar(), i = floor(x).toVar(), f0 = fract(x).toVar();

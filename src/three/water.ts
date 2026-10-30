@@ -1,7 +1,7 @@
-// open-water's ocean surface (src/ocean/water.js) in TSL: the camera-centred polar grid displaced by the FFT
+// open-water's ocean surface (archive/gl/src/ocean/water.js) in TSL: the camera-centred polar grid displaced by the FFT
 // cascades (mip level per ring, earth curvature), shaded with a slope-variance (LEAN / Bruneton 2010) Beckmann BRDF,
 // the reflected environment, physically based water-leaving radiance, crest subsurface scattering, foam, active
-// breaking, glints, the mirrored lightning channel and aerial perspective. RAIN_SURFACE_GLSL (src/fx/ripples.js)
+// breaking, glints, the mirrored lightning channel and aerial perspective. RAIN_SURFACE_GLSL (archive/gl/src/fx/ripples.js)
 // is ported here too. Crepuscular rays and fog are stubs until milestone 5.
 // Derivatives and implicit-LOD samples are all taken (and stored in vars) before any non-uniform branch: WGSL
 // requires uniform control flow for them, and three emits select() as if/else blocks.

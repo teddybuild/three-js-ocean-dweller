@@ -1,4 +1,4 @@
-// open-water's FFT ocean (src/ocean/ocean.js) as TSL compute: the same 4 cascades, spectrum, evolve, radix-2
+// open-water's FFT ocean (archive/gl/src/ocean/ocean.js) as TSL compute: the same 4 cascades, spectrum, evolve, radix-2
 // Stockham inverse FFT and assemble. Every field is an f32 storage buffer indexed y * N + x, the GL texel order, so
 // tools/fft-diff.mjs compares the two engines buffer for buffer. Each kernel bakes in its cascade, stage and
 // direction: a uniform rewritten between dispatches is overwritten before submit (docs/status/lessons.md).
@@ -168,7 +168,7 @@ export class OceanCompute {
   constructor(renderer: THREE.WebGPURenderer, res: number[]) {
     this.renderer = renderer;
     this.cascades = cascadesFor(res);
-    const r = rng(1337); // same seed and draw order as src/ocean/ocean.js
+    const r = rng(1337); // same seed and draw order as archive/gl/src/ocean/ocean.js
     for (const c of this.cascades) {
       const n = c.N;
       c.noise = vec4Buffer(n);
@@ -306,7 +306,7 @@ export class OceanCompute {
     this.renderer.compute(nodes);
   }
 
-  // what the water samples, as Ocean.textures() in src/ocean/ocean.js
+  // what the water samples, as Ocean.textures() in archive/gl/src/ocean/ocean.js
   textures() {
     return {
       disp: this.cascades.map((c) => c.tex.disp as THREE.Texture),

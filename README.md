@@ -1,6 +1,6 @@
 # Open Water
 
-A real-time, physically based ocean in pure WebGL2, with weather you can steer: calm golden
+A real-time, physically based ocean in three.js on WebGPU (a port of open-water's WebGL2 engine), with weather you can steer: calm golden
 hours, rising wind, rain, squall lines, gales, lightning and moonlit nights. There are no textures, models or
 image assets. Every wave, cloud, foam bubble and raindrop is computed. The only recorded
 material is sound (rain and thunder).
@@ -11,7 +11,7 @@ material is sound (rain and thunder).
 | ![The storm deck lowers](media/shelf.jpg) | ![Lightning](media/lightning.jpg) |
 | ![Gale and rain](media/storm.jpg) | ![Moonlit night, the storm flickering on the horizon](media/night.jpg) |
 
-**Live:** https://leonxlnx.github.io/open-water/ · **Film:** [`media/open-water.mp4`](media/open-water.mp4) (one minute, 1080p60, rendered offline by the same engine; the full-quality master is on the [releases page](https://github.com/Leonxlnx/open-water/releases)).
+**Upstream live demo:** https://leonxlnx.github.io/open-water/ · **Film:** [`media/open-water.mp4`](media/open-water.mp4) (one minute, 1080p60, rendered offline by the same engine; the full-quality master is on the [releases page](https://github.com/Leonxlnx/open-water/releases)).
 
 The film runs in three acts: a golden-hour calm; a storm arriving as the sky clouds over, from
 building cumulus to a low, dark deck, then rain, a gale and lightning; and a moonlit night after the storm, with
@@ -27,7 +27,7 @@ near the peak and ECKV for short waves, and, for the shorter waves, blended towa
 cos²ˢ spread as the wind approaches a gale (a confused storm sea under long-crested dominant waves),
 plus a narrow-band swell. Choppy displacement gives
 trochoidal crests, steeper as the wind rises (young storm seas). Significant wave heights match the Beaufort table (Bf 5: 2.1 m, Bf 7: 4.8 m,
-Bf 9: 9.2 m), and the GPU statistics are checked against the spectrum (`tools/hscheck.mjs`).
+Bf 9: 9.2 m), and the GPU statistics are checked against the spectrum (`archive/gl/tools/hscheck.mjs`, measured on the archived WebGL2 engine).
 
 **Light on water.** A slope-variance (LEAN) BRDF after Bruneton, Neyret and Holzschuch (2010)
 makes geometry, normals and BRDF hand over seamlessly. Sub-cascade roughness is the Cox–Munk
@@ -56,7 +56,7 @@ translucent layer over the water, never darker than it. The breaking
 threshold is expressed in standard deviations of the Jacobian and calibrated so coverage follows
 the Monahan & O'Muircheartaigh (1980) whitecap law within about 20% from 8 to 21 m/s, with active
 breaking about 35-55% of it
-(`tools/foam.mjs`).
+(`archive/gl/tools/foam.mjs`).
 
 **Sky.** The atmosphere follows Hillaire (2020): transmittance, multiple-scattering, sky-view
 and aerial-perspective LUTs. Clouds are volumetric, built from procedural Perlin–Worley noise
@@ -119,15 +119,15 @@ Rain and thunder are recordings. The film's soundtrack is rendered by the same e
 
 ## How it was checked
 
-Every visual decision was compared against real photographs, side by side (`tools/compare.mjs`).
+Every visual decision was compared against real photographs, side by side (`archive/gl/tools/compare.mjs`).
 The references were the NOAA Beaufort-scale series, open-ocean, overcast, rain-squall and storm
 photography. The measurable parts are checked with tools:
 
 | Quantity | Target | Result |
 | --- | --- | --- |
-| Significant wave height, Bf 5 / 7 / 9 (`tools/hscheck.mjs`) | 2–2.5 / 4–5.5 / 7–10 m | 2.1 / 4.8 / 9.2 m |
+| Significant wave height, Bf 5 / 7 / 9 (`archive/gl/tools/hscheck.mjs`) | 2–2.5 / 4–5.5 / 7–10 m | 2.1 / 4.8 / 9.2 m |
 | GPU height variance vs. spectrum integral | equal | within sampling error (±10%) |
-| Whitecap coverage at 8.5 / 11 / 15 / 21 m/s, steady state (`tools/foam.mjs`) | Monahan 0.57 / 1.37 / 3.9 / 12.4 % | 0.52 / 1.24 / 3.2 / 12.8 % (pixels with foam over half opaque); actively breaking 0.27 / 0.46 / 1.2 / 4.5 % |
+| Whitecap coverage at 8.5 / 11 / 15 / 21 m/s, steady state (`archive/gl/tools/foam.mjs`) | Monahan 0.57 / 1.37 / 3.9 / 12.4 % | 0.52 / 1.24 / 3.2 / 12.8 % (pixels with foam over half opaque); actively breaking 0.27 / 0.46 / 1.2 / 4.5 % |
 | Thunder delay | distance / 343 m/s | exact |
 | Visibility in the heaviest rain (Koschmieder, 3.9 / β) | ~2–3 km | 3.0 km |
 | Tonal range vs. reference photos (`tools/tonestats.mjs`) | p10 ≈ 5–45, highlights ≈ 230–255 | shadows deepened, highlights reach white |
@@ -186,19 +186,20 @@ URL parameters: `?preset=storm`, any weather key (for example `?wind=14&rain=0.4
 ## Run
 
 ```bash
-npm run dev
+pnpm install
+pnpm dev
 ```
 
-Then open http://localhost:5173. No build step and no runtime dependencies. You need a browser
-with WebGL2 and `EXT_color_buffer_float`, which covers every current desktop browser. The
+Then open http://localhost:5173. You need a browser with WebGPU (current Chrome or Edge; this repo is
+checked on Chrome on Linux with an NVIDIA GPU). The
 default quality tier targets integrated GPUs; add `?q=high` for the film settings.
 
 ## Render the film
 
 ```bash
-npm install
-npm run dev
-npm run render -- --fps 60 --w 1920 --h 1080 --out out/open-water.mp4
+pnpm install
+pnpm dev
+pnpm render --fps 60 --w 1920 --h 1080 --out out/open-water.mp4
 ```
 
 The renderer drives headless Chrome deterministically, frame by frame. Frames are piped into
@@ -213,7 +214,7 @@ src/sky/     atmosphere medium shared with the renderer
 archive/gl/  the original WebGL2 engine (reference only; tag gl-final runs it)
 src/audio/   sound engine (live and offline)
 src/film.js  the film timeline
-tools/       dev server, screenshots, calibration (wave heights, foam coverage), profiling
+tools/       screenshots (shot.mjs), regression frames (diff.mjs), live test, cloud sketch pad, image stats
 render/      offline film renderer
 ```
 

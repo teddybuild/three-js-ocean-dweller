@@ -1,4 +1,4 @@
-// open-water's rain (src/fx/rain.js) in TSL: motion-blurred drop streaks around the camera and splash crowns and jets
+// open-water's rain (archive/gl/src/fx/rain.js) in TSL: motion-blurred drop streaks around the camera and splash crowns and jets
 // on the sea surface, as instanced camera-facing quads. Drop diameters follow Marshall-Palmer N(D) = N0 exp(-Lambda D),
 // Lambda = 4.1 R^-0.21 /mm; terminal velocity v(D) = 9.65 - 10.3 exp(-0.6 D) m/s (Atlas et al. 1973). A drop covers a
 // point of its streak only for D / (v T) of the exposure T (Garg & Nayar 2006).
