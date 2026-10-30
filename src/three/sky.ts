@@ -16,7 +16,8 @@ const {
 
 const PI = Math.PI;
 const hg = (c: Node, g: number) => float((1 - g * g) / (4 * 3.14159)).div(pow(float(1 + g * g).sub(c.mul(2 * g)), 1.5));
-const fogHash = (x: Node) => fract(sin(x.mul(91.17)).mul(43758.5453));
+// sine-free hash, as GL fogHash (src/sky/atmosphere.js)
+const fogHash = (x: Node) => { const p = fract(x.mul(0.1031)); const q = p.mul(p.add(33.33)); return fract(q.mul(q.add(q))); };
 function fogNoise(x0: Node) {
   const x = float(x0).toVar(), i = floor(x).toVar(), f0 = fract(x).toVar();
   const f = f0.mul(f0).mul(f0).mul(f0.mul(f0.mul(6).sub(15)).add(10));

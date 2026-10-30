@@ -456,7 +456,9 @@ uniform vec2 uFogCell;    // squall cell: x half-length along the line, y depth 
 float rampInt(float u, float w) { return u < -w ? 0.0 : (u > w ? u : (u + w) * (u + w) / (4.0 * w)); }
 // path length inside the ramp from s0, rate a, over L
 float rampPath(float s0, float a, float L, float w) { return abs(a) < 1e-5 ? clamp((s0 + w) / (2.0 * w), 0.0, 1.0) * L : (rampInt(s0 + a * L, w) - rampInt(s0, w)) / a; }
-float fogHash(float x) { return fract(sin(x * 91.17) * 43758.5453); }
+// sine-free hash (Dave Hoskins, "Hash without Sine", MIT): fract(sin(x) * 43758) at lattice indices in the
+// thousands gave the same corner two values across a cell edge, a straight seam in the rain cells
+float fogHash(float x) { x = fract(x * 0.1031); x *= x + 33.33; x *= x + x; return fract(x); }
 float fogNoise(float x) { float i = floor(x), f = fract(x); f = f * f * f * (f * (f * 6.0 - 15.0) + 10.0); return mix(fogHash(i), fogHash(i + 1.0), f); }
 uniform vec2 uSprayHaze;  // x: extinction at the sea surface (1/m), y: camera height (m)
 // Rain falls in cells a few km across, not as one uniform sheet: x is the rain part of uFogDensity

@@ -11,7 +11,7 @@ Where the project is right now. Read this first, then the newest handoff.
 
 ## Right now (2026-10-29)
 
-three.js WebGPU port: `port-m0`..`port-m5` tagged and pushed; every effect ported, plus MSAA, centroid and thunder audio (all 10 diff scenes 37.3-49.8 dB, `tools/live-three.mjs` ok). Codex + agy reviewed the whole port (no P0, fixes in); app shell ported (UI, input, dynamic resolution, film). Full 60 s film renders in both engines (PSNR 34.5 dB average; error on glints); upstream sky edge still open (`storm` scene x = 292). Spec: `docs/systems/three-port.md`.
+three.js WebGPU port: `port-m0`..`port-m5` tagged and pushed; every effect ported, plus MSAA, centroid and thunder audio (all 10 diff scenes 37.3-49.8 dB, `tools/live-three.mjs` ok). Codex + agy reviewed the whole port (no P0, fixes in); app shell ported (UI, input, dynamic resolution, film). Full 60 s film renders in both engines (PSNR 34.5 dB average; error on glints); upstream sky edge fixed (sine hash in the rain cells); sea darker (`SEA_GRADE` 0.7); all 10 diff scenes 36.7-49.7 dB. No open port items; default engine flips only on the owner's parity call (ADR 0001). Spec: `docs/systems/three-port.md`.
 
 ## How to update
 
