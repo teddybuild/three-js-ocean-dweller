@@ -1,9 +1,10 @@
 // Live-mode smoke test: UI loads, presets switch, sound turns on, lightning + thunder fire,
-// and the render loop keeps running throughout. node tools/livetest.mjs
+// and the render loop keeps running throughout. Fails on a stalled step, sound not on, or any page error.
+// node tools/livetest.mjs
 import { launch, openApp } from './browser.mjs';
 
 const browser = await launch({ width: 1280, height: 720 });
-const errors = [];
+const errors = [], failures = [];
 try {
   const page = await openApp(browser, 'http://localhost:5173/', { width: 1280, height: 720 });
   page.on('pageerror', (e) => errors.push(e.message));
@@ -38,6 +39,11 @@ try {
     format: app.ms.format,
   }));
   console.log(JSON.stringify({ checks, audio, ui, errors }, null, 1));
+  for (const [label, dt] of checks) if (dt < 0.1) failures.push(`loop stalled: ${label} advanced ${dt} s`);
+  if (audio.state !== 'on') failures.push(`sound ${audio.state} after the click`);
+  failures.push(...errors, ...page.collectedErrors);
 } finally {
   await browser.close();
 }
+for (const f of failures) console.log('FAIL', f);
+process.exit(failures.length ? 1 : 0);

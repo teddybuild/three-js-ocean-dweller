@@ -313,11 +313,12 @@ async function start() {
     renderer.setPixelRatio(scale);
     renderer.setSize(window.innerWidth, window.innerHeight, false);
     const size = renderer.getDrawingBufferSize(new THREE.Vector2());
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+    if (size.x === hdr.width && size.y === hdr.height) return;
     hdr.setSize(size.x, size.y);
     clouds.resize(size.x, size.y, CQ.div);
     post.resize(size.x, size.y);
-    camera.aspect = window.innerWidth / window.innerHeight;
-    camera.updateProjectionMatrix();
   };
   resize();
   window.addEventListener('resize', resize);

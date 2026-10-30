@@ -256,13 +256,16 @@ export function encodeWav(buffer) {
 export const liveAudio = {
   engine: new AudioEngine(),
   ctx: null,
+  on: false,
+  // the last call wins: a mute while init() loads the recordings is not undone when it finishes
   async enable(on) {
+    this.on = on;
     if (on && !this.ctx) {
       this.ctx = new AudioContext({ latencyHint: 'playback' });
       await this.engine.init(this.ctx);
     }
     if (!this.ctx) return;
-    if (on) await this.ctx.resume(); else await this.ctx.suspend();
+    if (this.on) await this.ctx.resume(); else await this.ctx.suspend();
   },
   // per frame: S the weather state, hs the significant wave height (m), events the frame's thunder events
   update(S, hs, events) {
