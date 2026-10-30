@@ -4,7 +4,7 @@ Every shipped change, newest first: one line each, with its commits. Add a line 
 the why and the numbers go in the commit message and the day's `docs/log/` file.
 
 - 2026-10-29 19:10 App shell review (Codex + agy, no P0/P1): livetest asserts, live-three counts started thunder, mute-during-init race, three resize guard.
-- 2026-10-29 18:55 Full 60 s film in both engines (PSNR 34.5 dB avg), sky edge absent: open item closed.
+- 2026-10-29 18:55 Full 60 s film in both engines (PSNR 34.5 dB avg). Sky edge: wrongly closed, reopened 19:25.
 - 2026-10-29 18:50 One shared `liveAudio` (`src/audio/audio.js`) for both engines; `livetest.mjs` and `live-three.mjs` pass. `22687d9`
 - 2026-10-29 19:20 Port app shell: shared UI, drag/wheel camera, dynamic resolution, film hooks (`render.mjs --engine three`). `f09ae9e`
 - 2026-10-29 19:00 Port review fixes (Codex + agy, no P0): night-flip cloud reset, awaited error scopes, mute key, test gaps. `7b275ef`
