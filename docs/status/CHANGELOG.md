@@ -3,7 +3,9 @@
 Every shipped change, newest first: one line each, with its commits. Add a line when a change lands;
 the why and the numbers go in the commit message and the day's `docs/log/` file.
 
-- 2026-10-29 20:40 Distant rain showers under the big fair-weather cells (coverage 0.25-0.9), both engines; new diff scene `showers`.
+- 2026-10-29 20:25 Cloud sketch pad `tools/cloud-sketch.html`: paint or trace a tower side view, measures height, width profile, puff radii, saves JSON. `4b2321d`
+- 2026-10-29 20:05 Default engine is three.js WebGPU (the owner's parity call); GL at `?engine=gl`. `b5ddd9d`
+- 2026-10-29 19:58 Distant rain showers under the big fair-weather cells (coverage 0.25-0.9), both engines; new diff scene `showers`. `cd491a5`
 - 2026-10-29 19:52 Denser rain: 600k streak drops (was 120k), gain 30 (was 13), both engines.
 - 2026-10-29 19:35 Less gale foam: residual decay 0.1 / 0.15 1/s at 18 / 24 m/s (was 0.058 / 0.05); 26 m/s coverage 40% -> 14%. `d5c22e4`
 - 2026-10-29 19:23 Sky edge fixed: sine-free `fogHash` (Hoskins, MIT) in both engines; storm step at x 292 -6.6 -> 0. `a0079a9`

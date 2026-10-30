@@ -19,6 +19,9 @@ grouped by topic, merged, never appended blindly. A lesson that can be a check b
 - `fract(sin(x) * 43758.5453)` hashes break value noise at lattice indices in the thousands (one ULP gives a corner two values): a straight world-anchored seam. Use the sine-free hash (`fogHash` in `src/sky/atmosphere.js`).
 - At the usual camera angles the sea is sky reflection: scaling water-leaving `rrs` (even to 0) moved it 0-1/255. Darken with `SEA_GRADE` (`src/ocean/water.js`).
 - Gale foam rows (`uFoamStretch`) hide a saturated foam density: stretch off turns the sea white. Tune coverage with `Weather.foam()` decay, not the stretch.
+- A 2D weather-map threshold in the cloud density extrudes straight up: vertical walls and flat tops. Let the 3D shape noise decide the outline; the 2D field only biases it.
+- `uShape` inverted-Worley channels (g*0.6 + b*0.4) span ~0.52-0.85, median 0.70 (measured): rescale before thresholding, or every threshold below 0.6 saturates.
+- Cloud code assumes hf <= 1: the sparse-cover sky-light term `(1 - hf)` goes negative above the plain top and brightens it (anything taller than the cumulus layer).
 - Find a world-anchored artifact by elimination: turn one term off per shot (`tools/shot.mjs`), measure column means; guesses at the cause cost two rounds here.
 
 ## Porting to TSL/WGSL (Codex, agy, web-ocean-3d)
