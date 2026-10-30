@@ -108,6 +108,8 @@ async function start() {
   // Floating camera, as src/main.js updateCamera + cameraMatrices: heave, pitch and roll with the sea (a small boat
   // responds to waves longer than itself, so the probe samples a mip level matching an ~8 m hull). ?render waits
   // for the probe (GL's sync readback); live uses the last finished one.
+  // per-frame temporaries, reused (no allocation in the live loop)
+  const vFwd = new THREE.Vector3(), vRight = new THREE.Vector3(), vUp = new THREE.Vector3(), vAt = new THREE.Vector3(), vView = new THREE.Vector3(), vLight = new THREE.Vector3();
   const updateCamera = async (dt: number) => {
     const r = !cam.float ? probe.result : RENDER_MODE ? await probe.read(cam.base, 8) : probe.run(cam.base, 8);
     const f = cam.float ? 1 - Math.min(Math.max((cam.eye - 12) / 28, 0), 1) : 0;
@@ -118,16 +120,16 @@ async function start() {
     cam.tilt += (Math.atan(along) * 0.55 * f - cam.tilt) * k;
     cam.roll += (Math.atan(across) * 0.55 * f - cam.roll) * k;
     camera.position.set(cam.base[0] + r.dx * f * 0.8, cam.eye + cam.heave, cam.base[1] + r.dz * f * 0.8);
-    cam.pos = camera.position.toArray();
+    camera.position.toArray(cam.pos);
     const fovDeg = (cam.fov * 180) / Math.PI;
     if (camera.fov !== fovDeg) { camera.fov = fovDeg; camera.updateProjectionMatrix(); }
     const pitch = cam.pitch + cam.tilt;
-    const fwd = new THREE.Vector3(Math.cos(pitch) * Math.cos(cam.yaw), Math.sin(pitch), Math.cos(pitch) * Math.sin(cam.yaw));
-    const right0 = fwd.clone().cross(camera.up.set(0, 1, 0)).normalize();
-    const up0 = right0.clone().cross(fwd);
+    const fwd = vFwd.set(Math.cos(pitch) * Math.cos(cam.yaw), Math.sin(pitch), Math.cos(pitch) * Math.sin(cam.yaw));
+    const right0 = vRight.copy(fwd).cross(camera.up.set(0, 1, 0)).normalize();
+    const up0 = vUp.copy(right0).cross(fwd);
     // roll: three's lookAt rebuilds the same basis from this up vector
     camera.up.copy(up0.multiplyScalar(Math.cos(cam.roll)).addScaledVector(right0, -Math.sin(cam.roll)));
-    camera.lookAt(camera.position.clone().add(fwd));
+    camera.lookAt(vAt.copy(camera.position).add(fwd));
     camera.updateMatrixWorld();
   };
   const mixv = (a: number[], b: number[], t: number) => a.map((x, i) => x + (b[i] - x) * t);
@@ -187,8 +189,8 @@ async function start() {
     // illuminance of a stroke ~ I / d^2 with I ~ 1e8 cd, relative to the light source (sun ~1e5 lux, moon ~0.25)
     const flashE = Math.min((flash * 1e8) / (ldist * ldist + 300 * 300) / (night ? 0.25 : 1e5), 6);
     const flashRGB = [0.8 * flashE, 0.85 * flashE, flashE];
-    const lv = new THREE.Vector3(lp[0] - cp.x, (night ? lp[1] * 0.3 : lp[1] * 0.5) - cp.y, lp[2] - cp.z);
     fogU.flashFog.value.fromArray(flashRGB.map((x) => x * 0.25));
+    const lv = vLight.set(lp[0] - cp.x, (night ? lp[1] * 0.3 : lp[1] * 0.5) - cp.y, lp[2] - cp.z);
     fogU.flashDir.value.copy(lv).normalize();
     // rain and mist (as src/main.js fogU): rain extinction takes visibility from >20 km to ~1.5 km in a downpour
     const rainBeta = (r: number) => (r > 0.002 ? 0.336e-3 * Math.pow(r * 50, 0.63) : 0);
@@ -282,7 +284,7 @@ async function start() {
     rain.update({ ...fxU, rain: L.rain, time: elapsed, exposure: 1 / 60, wind: [Math.cos(wdr) * S.wind * 0.8, Math.sin(wdr) * S.wind * 0.8], drift: rainDrift, flash: flashRGB });
     // post options, as src/main.js passes them
     // shooting into a low sun a photographer meters the bright sky (scene), not the incident light
-    const fwd = camera.getWorldDirection(new THREE.Vector3());
+    const fwd = camera.getWorldDirection(vView);
     const fh = Math.hypot(fwd.x, fwd.z) || 1;
     const backlit = night ? 0 : smoothstep(0.55, 0.95, (fwd.x * sun[0] + fwd.z * sun[2]) / fh / (Math.hypot(sun[0], sun[2]) || 1)) * (1 - smoothstep(12, 35, weather.time.sunElev)) * (1 - L.clouds * 0.8);
     // how much of the frame a storm fills (overhead, or a squall line in view)
