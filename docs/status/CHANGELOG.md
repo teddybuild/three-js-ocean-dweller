@@ -3,6 +3,7 @@
 Every shipped change, newest first: one line each, with its commits. Add a line when a change lands;
 the why and the numbers go in the commit message and the day's `docs/log/` file.
 
+- 2026-10-29 20:00 Less gale foam: residual decay 0.1 / 0.15 1/s at 18 / 24 m/s (was 0.058 / 0.05); 26 m/s coverage 40% -> 14%.
 - 2026-10-29 19:45 Sky edge fixed: sine-free `fogHash` (Hoskins, MIT) in both engines; storm step at x 292 -6.6 -> 0.
 - 2026-10-29 19:20 Darker sea: `SEA_GRADE` 0.7 on reflected sky + body, both engines (glints, foam full); sea 13-39% darker.
 - 2026-10-29 19:10 App shell review (Codex + agy, no P0/P1): livetest asserts, live-three counts started thunder, mute-during-init race, three resize guard.

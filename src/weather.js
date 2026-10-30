@@ -103,9 +103,10 @@ export class Weather {
     // follows Monahan & O'Muircheartaigh (1980), stage A + B, within ~10% from 8 to 28 m/s.
     const z = table(U, [3, 5, 8.5, 11, 15, 21, 28], [3.2, 2.62, 2.16, 1.97, 1.69, 1.22, 0.52]);
     const gain = 1.2;
-    // residual foam lingers longer in strong wind (e-folding ~7 s at 14 m/s, ~20 s in a gale):
-    // drifting at ~0.035 U it draws streaks 10-15 m long
-    const decay = table(U, [5, 8.5, 14, 18, 24], [0.3, 0.1, 0.075, 0.058, 0.05]);
+    // residual foam e-folds in ~13 s at 14 m/s and ~7 s in a gale: "too many lines of foam" (owner,
+    // 2026-10-29) at 26 m/s with the old ~20 s (0.058, 0.05), 40% of the sea in wind rows. Above 14 m/s the
+    // coverage now sits below Monahan & O'Muircheartaigh (14% at 26 m/s, MO 26%).
+    const decay = table(U, [5, 8.5, 14, 18, 24], [0.3, 0.1, 0.075, 0.1, 0.15]);
     return [z, gain, decay];
   }
 }
