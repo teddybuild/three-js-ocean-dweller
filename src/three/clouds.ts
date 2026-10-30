@@ -98,6 +98,8 @@ function volume(renderer: THREE.WebGPURenderer, n: number, texel: (p: Node) => N
 
 // ---- the march (CLOUD_GLSL)
 
+const TOWER_M = 3000; // m, as GL
+
 export const cloudU = {
   windOffset: uniform(new THREE.Vector3()),  // metres of advection (xz) and detail evolution (y)
   coverage: uniform(0),                      // fair-weather side of the front
@@ -185,7 +187,8 @@ export class CloudsCompute {
       const cov = clamp(remap(base, 0.25, 0.85, 0, 1).mul(0.6).add(cells.mul(0.55)).sub(0.15), 0, 1);
       const type = clamp(perlinFbm(p.add(3.7), 3, 4).mul(0.5).add(0.5), 0, 1);
       const big = clamp(perlinFbm(p.add(9.1), 2, 3).mul(0.6).add(0.5), 0, 1);
-      textureStore(wm, uvec2(x, y), vec4(cov, type, big, 1));
+      // towers: ~10% of the cloudy area; a rises from a footprint's edge (0) to its interior (1)
+      textureStore(wm, uvec2(x, y), vec4(cov, type, big, smoothstep(0.62, 0.8, perlinFbm(p.add(5.3), 8, 2).mul(0.5).add(0.5))));
     })().compute(512 * 512));
     [...shape.temps, ...detail.temps].forEach((t) => t.dispose());
     this.shadowNode = this.shadowKernel();
@@ -227,7 +230,9 @@ export class CloudsCompute {
     const storm = smoothstep(0.5, 0.9, u.dark).greaterThan(0.02).or(u.front.w.greaterThan(0).and(u.stormA.y.greaterThan(0.5)));
     return select(storm, min(b, SCUD_BASE), b);
   }
-  shellTop() { return select(cloudU.front.w.greaterThan(0), max(cloudU.top, cloudU.stormTop), cloudU.top); }
+  // fair-weather towers (congestus) rise up to TOWER_M above the cumulus top; none under a storm deck
+  towerM() { return smoothstep(0.3, 0.6, cloudU.dark).oneMinus().mul(TOWER_M); }
+  shellTop() { return select(cloudU.front.w.greaterThan(0), max(cloudU.top.add(this.towerM()), cloudU.stormTop), cloudU.top.add(this.towerM())); }
   maxCoverage() { return select(cloudU.front.w.greaterThan(0), max(cloudU.coverage, cloudU.stormA.x), cloudU.coverage); }
 
   // local cloud regime at a point: R = (coverage, darkness, density, front mask), and its base and top. h: sample
@@ -278,15 +283,19 @@ export class CloudsCompute {
           out.assign(d2.mul(min(R.z, 0.07)).mul(sg).mul(0.5));
         });
       });
-    }).ElseIf(h.lessThanEqual(top), () => {
-      const hf = h.sub(base).div(top.sub(base)).toVar();
+    }).ElseIf(h.lessThanEqual(top.add(smoothstep(0.3, 0.6, R.y).oneMinus().mul(R.w.oneMinus()).mul(TOWER_M))), () => {
       const cov = R.x, dark = R.y;
       const wuv = p.xz.add(wo.xz).div(30000);
       const wm = texture(this.weatherMap, wuv).level(this.lodFor(cx, 30000 / 512)).toVar();
+      // A tower (weather map a) grows out of its cloud's body (from 30% of the plain height) to a top set by g, the
+      // cloud-type noise, so neighbours reach similar heights. Its footprint is broad, then shrinks over a 600 m cap as
+      // a dome (radius ~ sqrt(1 - u^2)); the shape noise carves the lobes (no floor, no taper inside it).
+      const th = smoothstep(0.3, 0.6, dark).oneMinus().mul(R.w.oneMinus()).mul(TOWER_M).mul(mix(0.35, 1, wm.g)).mul(step(0.02, wm.a)).toVar();
+      const hf = h.sub(base).div(top.sub(base)).toVar();
       const c = smoothstep(cov.oneMinus().sub(0.18), cov.oneMinus().add(0.2), wm.r.mul(0.85).add(wm.b.mul(0.25).mul(cov))).toVar();
       // an overcast deck is closed: no column-shaped gaps from the 2D coverage map
       c.assign(max(c, smoothstep(0.82, 0.96, cov)));
-      If(c.greaterThan(0.001), () => {
+      If(c.greaterThan(0.001).and(h.lessThanEqual(top.add(th))), () => {
         // shape noise: ~350 m billows for cumulus, ~750 m cells for storm decks (blended in between)
         const pw = p.add(vec3(wo.x, 0, wo.z)).toVar();
         const forced = u.shapeLod.greaterThanEqual(0);
@@ -296,6 +305,16 @@ export class CloudsCompute {
           n.assign(mix(nc, n, smoothstep(0.15, 0.85, dark)));
         });
         const wf = n.g.mul(0.625).add(n.b.mul(0.25)).add(n.a.mul(0.125)).toVar();
+        // the tower's coverage: 0.75 inside (the shape noise still carves it), its edge wobbled into lobes by the shape
+        // noise, and only on a dense cloud (a tower never stands in clear sky). Above the plain top without one, hg is 0.
+        const ct = float(0).toVar();
+        If(th.greaterThan(0).and(h.greaterThan(base.add(top.sub(base).mul(0.3)))), () => {
+          const uc = clamp(h.sub(top).sub(th).add(600).div(600), 0, 1);
+          const thr = sqrt(uc.mul(uc).oneMinus()).oneMinus().mul(0.9).add(0.1).toVar();
+          ct.assign(smoothstep(thr, thr.add(0.4), wm.a.add(n.g.sub(0.5).mul(0.5))).mul(smoothstep(0.3, 0.6, c)).mul(0.75));
+        });
+        const tw = smoothstep(0, 0.2, ct).toVar();
+        c.assign(max(c, ct));
         // vertical profile. Fair weather: cumulus towers with type-dependent tops. Storm: a layer deck whose base
         // undulates (rolls, scud) and whose thickness varies 2-3x (the mottled light and dark patches of an overcast)
         const span = max(top.sub(base), 100).toVar();
@@ -314,13 +333,14 @@ export class CloudsCompute {
         const hg = select(anvilSlab,
           smoothstep(baseFrac, baseFrac.add(0.05), hf).mul(smoothstep(0.95, 1, hf).oneMinus()),
           smoothstep(baseFrac, baseFrac.add(mix(110, 140, dark).div(span)), hf).mul(smoothstep(tf.mul(0.55), tf, hf).oneMinus())).toVar();
+        hg.assign(max(hg, tw));
         const shape = remap(n.r, wf.sub(1), 1, 0, 1).toVar();
         If(R.w.greaterThan(0.6).and(hf.lessThan(0.8)), () => { shape.assign(max(shape, smoothstep(0.6, 0.9, R.w).mul(0.35))); });
-        shape.assign(max(shape, smoothstep(0.35, 0.8, c).mul(0.45).mul(dark.oneMinus())));
+        shape.assign(max(shape, smoothstep(0.35, 0.8, c).mul(0.45).mul(dark.oneMinus()).mul(tw.oneMinus())));
         // the base of a cumulus is a little narrower than its body
         const c2 = c.mul(mix(mix(0.8, 1, smoothstep(0, 0.12, hf)), 1, dark)).toVar();
         // coverage erodes with height (Schneider 2017): the cloud narrows upward into turrets
-        const d = remap(shape.mul(hg), c2.mul(mix(1, 0.55, hf.mul(dark.oneMinus()))).oneMinus(), 1, 0, 1).mul(c2).toVar();
+        const d = remap(shape.mul(hg), c2.mul(mix(1, 0.55, mix(hf, 0.6, tw).mul(dark.oneMinus()))).oneMinus(), 1, 0, 1).mul(c2).toVar();
         If(d.greaterThan(0), () => {
           if (detail !== false) {
             If(detail, () => {
@@ -506,7 +526,7 @@ export class CloudsCompute {
               });
               If(R.y.greaterThan(0.5).and(marchedUp.greaterThan(0)), () => { tauUp.addAssign(tauUp.div(marchedUp).mul(max(top.sub(uhLast), 0))); });
             }).Else(() => {
-              tauUp.assign(sigma.mul(hf.oneMinus()).mul(top.sub(base)).mul(0.35));
+              tauUp.assign(sigma.mul(max(hf.oneMinus(), 0)).mul(top.sub(base)).mul(0.35)); // (a tower above the plain top: hf > 1)
             });
             // two-stream diffusion transmittance for thick media (asymmetry g ~ 0.85): 1/(1 + 0.75(1-g) tau)
             const diffSun = float(1).div(tau.mul(0.11).add(1));

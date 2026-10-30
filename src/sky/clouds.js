@@ -83,7 +83,8 @@ void main() {
   float cov = clamp(remap(base, 0.25, 0.85, 0.0, 1.0) * 0.6 + cells * 0.55 - 0.15, 0.0, 1.0);
   float type = clamp(perlinFbm(p + 3.7, 3.0, 4) * 0.5 + 0.5, 0.0, 1.0);
   float big = clamp(perlinFbm(p + 9.1, 2.0, 3) * 0.6 + 0.5, 0.0, 1.0);
-  o = vec4(cov, type, big, 1.0);
+  // towers: ~10% of the cloudy area; a rises from a footprint's edge (0) to its interior (1)
+  o = vec4(cov, type, big, smoothstep(0.6, 0.9, perlinFbm(p + 5.3, 8.0, 2) * 0.5 + 0.5));
 }`;
 
 // ---------------------------------------------------------------- raymarch core
@@ -129,7 +130,10 @@ float shellBase() {
   bool storm = smoothstep(0.5, 0.9, uDark) > 0.02 || (uFront.w > 0.0 && uStormA.y > 0.5);
   return storm ? min(b, SCUD_BASE) : b;
 }
-float shellTop() { return uFront.w > 0.0 ? max(uTop, uStormTop) : uTop; }
+// fair-weather towers (congestus) rise up to TOWER_M above the cumulus top; none under a storm deck
+const float TOWER_M = 3000.0;
+float towerM() { return TOWER_M * (1.0 - smoothstep(0.3, 0.6, uDark)); }
+float shellTop() { return uFront.w > 0.0 ? max(uTop + towerM(), uStormTop) : uTop + towerM(); }
 float maxCoverage() { return uFront.w > 0.0 ? max(uCoverage, uStormA.x) : uCoverage; }
 
 // local cloud regime at a point: x coverage, y darkness, z density, w front mask; base/top out
@@ -171,11 +175,17 @@ float cloudDensityR(vec3 p, float h, bool detail, vec4 R, float base, float top)
     d2 *= 1.0 - smoothstep(3000.0, 8000.0, gFoot / max(uPixelAngle, 1e-6));
     return d2 * min(R.z, 0.07) * sg * 0.5;
   }
-  if (h > top) return 0.0;
-  float hf = (h - base) / (top - base);
   float cov = R.x, dark = R.y;
+  float tm = TOWER_M * (1.0 - smoothstep(0.3, 0.6, dark)) * (1.0 - R.w);
+  if (h > top + tm) return 0.0;
   vec2 wuv = (p.xz + uWindOffset.xz) / 30000.0;
   vec4 wm = textureLod(uWeather, wuv, lodFor(30000.0 / 512.0));
+  // A tower (weather map a) grows out of its cloud's body (from 30% of the plain height) to a top set by g, the
+  // cloud-type noise, so neighbours reach similar heights. Its footprint is broad, then shrinks over a 600 m cap
+  // as a dome (radius ~ sqrt(1 - u^2)); the shape noise carves the lobes (no floor, no taper inside it).
+  float th = tm * mix(0.35, 1.0, wm.g) * step(0.02, wm.a);
+  if (h > top + th) return 0.0;
+  float hf = (h - base) / (top - base);
   float c = smoothstep(1.0 - cov - 0.18, 1.0 - cov + 0.2, wm.r * 0.85 + wm.b * 0.25 * cov);
   // an overcast deck is closed: no column-shaped gaps from the 2D coverage map
   c = max(c, smoothstep(0.82, 0.96, cov));
@@ -188,6 +198,24 @@ float cloudDensityR(vec3 p, float h, bool detail, vec4 R, float base, float top)
     n = mix(nc, n, smoothstep(0.15, 0.85, dark));
   }
   float wf = n.g * 0.625 + n.b * 0.25 + n.a * 0.125;
+  // the tower's coverage: 0.85 inside (the shape noise still carves it), its edge wobbled into lobes by the
+  // shape noise, and only on a dense cloud (a tower never stands in clear sky)
+  float ct = 0.0;
+  if (th > 0.0 && h > base + 0.3 * (top - base)) {
+    float u = clamp((h - top - th + 600.0) / 600.0, 0.0, 1.0);
+    float thr = 0.1 + 1.35 * (1.0 - sqrt(1.0 - u * u));
+    // (a pile of bubbles: the shape texture's inverted-Worley channels, ~800 m and ~400 m cells, inside the
+    // footprint's envelope)
+    vec4 nb = textureLod(uShape, (p + wo) / 3200.0 + 0.61, lodFor(3200.0 / 128.0));
+    // (the 3D bubbles decide; the 2D envelope only biases them: a 2D threshold extrudes into flat walls)
+    float env = wm.a - thr + smoothstep(0.3, 0.6, c) - 1.0;
+    // (the bubble sum spans ~0.52-0.85, median 0.70: rescaled to ~0-1)
+    float bub = (nb.g * 0.6 + nb.b * 0.4 - 0.55) / 0.3;
+    ct = 0.85 * smoothstep(0.4, 0.55, bub + 0.2 + env * 0.8);
+  }
+  if (h > top && ct <= 0.0) return 0.0;
+  float tw = smoothstep(0.0, 0.2, ct);
+  c = max(c, ct);
   // vertical profile. Fair weather: cumulus towers with type-dependent tops.
   // Storm: a layer deck whose base undulates (rolls, scud) and whose thickness varies 2-3x,
   // which is what gives an overcast its mottled light and dark patches.
@@ -205,14 +233,15 @@ float cloudDensityR(vec3 p, float h, bool detail, vec4 R, float base, float top)
   float hg = smoothstep(baseFrac, baseFrac + mix(110.0, 140.0, dark) / max(top - base, 100.0), hf) * (1.0 - smoothstep(tf * 0.55, tf, hf));
   bool anvilSlab = dark > 0.5 && hf > 0.8;
   if (anvilSlab) hg = smoothstep(baseFrac, baseFrac + 0.05, hf) * (1.0 - smoothstep(0.95, 1.0, hf));
+  hg = max(hg, tw);
   float shape = remapc(n.r, wf - 1.0, 1.0, 0.0, 1.0);
   if (R.w > 0.6 && hf < 0.8) shape = max(shape, 0.35 * smoothstep(0.6, 0.9, R.w));
-  shape = max(shape, 0.45 * smoothstep(0.35, 0.8, c) * (1.0 - dark));
+  shape = max(shape, 0.45 * smoothstep(0.35, 0.8, c) * (1.0 - dark) * (1.0 - tw));
   float d = shape * hg;
   // the base of a cumulus is a little narrower than its body
   c *= mix(mix(0.8, 1.0, smoothstep(0.0, 0.12, hf)), 1.0, dark);
   // coverage erodes with height (Schneider 2017): the cloud narrows upward into turrets
-  d = remapc(d, 1.0 - c * mix(1.0, 0.55, hf * (1.0 - dark)), 1.0, 0.0, 1.0) * c;
+  d = remapc(d, 1.0 - c * mix(1.0, 0.55, mix(hf, 0.6, tw) * (1.0 - dark)), 1.0, 0.0, 1.0) * c;
   if (d <= 0.0) return 0.0;
   if (detail) {
     // (a cumulonimbus billows at ~1 km, a fair-weather cumulus at ~400 m)
@@ -392,7 +421,7 @@ vec4 marchClouds(vec3 ro, vec3 rd, int steps, int lightSteps, int lightDetail, f
         }
         if (R.y > 0.5 && marchedUp > 0.0) tauUp += tauUp / marchedUp * max(top - uhLast, 0.0);
       } else {
-        tauUp = sigma * (1.0 - hf) * (top - base) * 0.35;
+        tauUp = sigma * max(1.0 - hf, 0.0) * (top - base) * 0.35;  // (a tower above the plain top: hf > 1)
       }
       // two-stream diffusion transmittance for thick media (asymmetry g ~ 0.85): 1/(1 + 0.75(1-g) tau)
       float diffSun = 1.0 / (1.0 + 0.11 * tau);
