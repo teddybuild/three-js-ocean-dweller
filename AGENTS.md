@@ -58,6 +58,8 @@ history and numbers go in the day's `docs/log/` file.
 - `node tools/lut-diff.mjs [--self-test]` - the three.js atmosphere LUTs, env and irradiance against GL.
 - `node tools/live-three.mjs` - the three.js live path: loop, UI, drag, errors, thunder audio.
 - `node render/render.mjs [--engine three] [--from s --to s --w --h --fps --out]` - the offline film (dev server on :5173).
+- http://localhost:5173/tools/cloud-sketch.html - paint a cloud side view in metres (or trace a photo); measures
+  height, width profile and puff radii, saves JSON + PNG for fitting the cloud shader.
 - `node tools/cloud-diff.mjs [--self-test]` - the three.js cloud volumes, weather, shadow, env and screen against GL.
 
 ## Workflow
