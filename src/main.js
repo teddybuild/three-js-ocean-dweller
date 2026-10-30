@@ -240,6 +240,9 @@ export class App {
       uFogStorm: [stormFog, (night ? 0.4 : 0.3) + ((night ? 0.5 : 0.6) - (night ? 0.4 : 0.3)) * mCam, (fogDensity + mCam * Math.max(stormFog - fogDensity, 0)) * (fOn ? (S.cloudBase + S.sBase) * 0.5 + 100 : S.cloudBase + 100)],
       uFogCam: [this.cam.pos[0], this.cam.pos[2]],
       uRainCell: [fOn ? 0 : rainBeta(S.rain), Math.cos(wdr) * S.wind * 0.8 * t, Math.sin(wdr) * S.wind * 0.8 * t],
+      // distant showers under the big cells of partly cloudy skies (an overcast rains in uRainCell)
+      uShowerMap: this.clouds.weatherMap,
+      uShower: [4e-3 * smoothstep(0.25, 0.4, S.clouds) * (1 - smoothstep(0.8, 0.9, S.clouds)), S.clouds, this.windOffset[0], this.windOffset[2]],
       uFlashFog: flashRGB.map((x) => x * 0.25), uFlashDir: flashDir,
       // spray haze from breaking crests: grows from a near gale (~14 m/s) upwards
       uSprayHaze: [smoothstep(14, 24, S.wind) * 1.8e-3, Math.max(this.cam.pos[1], 0.5)],

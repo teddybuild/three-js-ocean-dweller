@@ -46,6 +46,7 @@ export const fogU = {
   rainCell: uniform(new THREE.Vector3()),         // x: the rain part of density (the shower at the camera), yz: cell drift (m)
   flashFog: uniform(new THREE.Vector3()), flashDir: uniform(new THREE.Vector3(0, 1, 0)), // lightning light in the rain
   sprayHaze: uniform(new THREE.Vector2()),        // x: extinction at the sea surface (1/m), y: camera height (m)
+  shower: uniform(new THREE.Vector4()),           // distant showers: x extinction in a core (1/m, 0 = off), y coverage, zw cloud wind offset xz (m)
 };
 
 export const skyU = {
@@ -87,6 +88,7 @@ export class SkyCompute {
   clouds = texture(this.blank);
   shaftShadow = texture(this.blank); // the cloud-shadow map (the caller sets .value, with skyU.shaftRect)
   cloudDepth = texture(this.blank);  // the screen clouds' mean distance (km, CloudsCompute.depth)
+  showerMap = texture(this.blank);   // the clouds' weather map (CloudsCompute.weatherMap): where the distant showers fall
   irradiance = (() => { const t = new THREE.StorageTexture(2, 1); t.type = THREE.HalfFloatType; t.minFilter = t.magFilter = THREE.NearestFilter; return t; })();
   private renderer: THREE.WebGPURenderer;
   private atmo: AtmosphereCompute;
@@ -241,8 +243,18 @@ export class SkyCompute {
     return smoothstep(0.4, 0.78, fogNoise2(q.div(6000)).mul(0.65).add(fogNoise2(q.div(2300).add(7.3)).mul(0.35))).mul(1.6).add(0.08);
   }
 
-  // GL applyFog as its two parts: col through dist metres along dir becomes col * T + Lf
-  fog(dir: Node, dist: Node) {
+  // Showers under the biggest fair-weather clouds, kilometres off: the cores of the tall, large cells of the clouds'
+  // weather map (the coverage lookup of the cloud density), ~3% of the map at any coverage
+  private showerAt(xz: Node) {
+    const sh = fogU.shower;
+    const wm = this.showerMap.sample(xz.add(sh.zw).div(30000)).level(4).toVar();
+    const c = smoothstep(sh.y.oneMinus().sub(0.18), sh.y.oneMinus().add(0.2), wm.r.mul(0.85).add(wm.b.mul(0.25).mul(sh.y)));
+    return smoothstep(0.6, 0.8, wm.r).mul(smoothstep(0.5, 0.7, wm.g)).mul(smoothstep(0.3, 0.6, c));
+  }
+
+  // GL applyFog as its two parts: col through dist metres along dir becomes col * T + Lf. fc: GL's gl_FragCoord (y up),
+  // the showers' jitter; compute kernels pass their texel.
+  fog(dir: Node, dist: Node, fc: Node = vec2(screenCoordinate.x, screenSize.y.sub(screenCoordinate.y))) {
     const f = fogU, sun = atmoU.sun;
     // the veil only exists below the cloud base
     const L = min(dist, select(dir.y.greaterThan(0), f.top.div(max(dir.y, 0.015)), 1e9)).toVar();
@@ -305,6 +317,28 @@ export class SkyCompute {
       stormFrac.mulAssign(mix(streak.mul(0.16).add(0.92), streak.mul(0.5).add(0.72), near));
       tcurtain.assign(tcp);
     });
+    // the showers' optical depth and its mean distance (32 steps from 4 km to the base or 40 km, jittered per pixel by
+    // interleaved gradient noise: even steps alias into hard stripes). Upward rays ignore dist: a cloud never stands in
+    // front of the rain below its base, and the half-resolution cloud depth would cut blocks.
+    const tsh = float(0).toVar(), dsh = float(0).toVar();
+    If(f.shower.x.greaterThan(0), () => {
+      const t1 = min(select(dir.y.greaterThan(0), f.top.div(max(dir.y, 1e-6)), float(dist)), 40000).toVar();
+      If(t1.greaterThan(4000), () => {
+        const dt = t1.sub(4000).div(32).toVar();
+        const jit = fract(fract(dot(fc, vec2(0.06711056, 0.00583715))).mul(52.9829189)).toVar();
+        Loop(32, ({ i }: Node) => {
+          const t = float(i).add(jit).mul(dt).add(4000).toVar();
+          // (fading into the cloud base, and in from 4 km: showers stay distant columns, never a veil overhead)
+          const k = this.showerAt(f.cam.add(dir.xz.mul(t))).mul(smoothstep(f.top.mul(0.75), f.top, dir.y.mul(t)).oneMinus())
+            .mul(smoothstep(4000, 8000, t)).mul(dt).toVar();
+          tsh.addAssign(k);
+          dsh.addAssign(k.mul(t));
+        });
+        dsh.divAssign(max(tsh, 1e-6));
+        tsh.mulAssign(f.shower.x);
+        tau.addAssign(tsh);
+      });
+    });
     // wind-borne spray hugging the sea (scale height ~25 m): integral of exp(-h/H) along the ray
     If(f.sprayHaze.x.greaterThan(0), () => {
       const Hs = 25;
@@ -331,11 +365,18 @@ export class SkyCompute {
       const air = this.aerial(dir, min(tcurtain, L).mul(1e-3));
       curtain.assign(curtain.mul(air.T).add(air.L.mul(select(atmoU.lightMag.greaterThan(-20), 0.6, 1))));
     });
-    const Lf = mix(this.fogRadiance(dir, atmoU.hazeSun), curtain, sf).mul(T.oneMinus()).toVar();
+    // a shower stands in its cloud's shadow: diffuse light, a little sun through its sides, haze in front
+    const shf = min(tsh.div(max(tau, 1e-6)), sf.oneMinus()).toVar();
+    const shower = vec3(dot(this.fogRadiance(dir, float(0.3)), luma)).mul(vec3(0.93, 0.97, 1.03)).mul(0.5).toVar();
+    If(shf.greaterThan(0), () => {
+      const air = this.aerial(dir, dsh.mul(1e-3));
+      shower.assign(shower.mul(air.T).add(air.L));
+    });
+    const Lf = mix(this.fogRadiance(dir, atmoU.hazeSun), curtain, sf).mul(shf.oneMinus()).add(shower.mul(shf)).mul(T.oneMinus()).toVar();
     return { T, Lf };
   }
-  applyFog(col: Node, dir: Node, dist: Node) {
-    const { T, Lf } = this.fog(dir, dist);
+  applyFog(col: Node, dir: Node, dist: Node, fc?: Node) {
+    const { T, Lf } = this.fog(dir, dist, fc);
     return col.mul(T).add(Lf);
   }
 
@@ -420,7 +461,7 @@ export class SkyCompute {
       // reflectance and its water. This half only feeds the mip chain, whose wide blur on a rough sea must not average
       // in the haze glare that hugs the horizon.
       const deck = vec3(col).toVar();
-      col.assign(this.applyFog(col, d, 1e9));
+      col.assign(this.applyFog(col, d, 1e9, vec2(float(x), float(y)).add(0.5)));
       const Fs = pow(min(dy0.negate().add(0.12), 1).oneMinus(), 5).mul(0.98).add(0.02).toVar();
       const Ed = this.sunIlluminance().mul(skyU.sunVis).mul(max(atmoU.sun.y, 0)).add(this.skyIrradiance());
       const sea = Fs.mul(col).add(Fs.oneMinus().mul(skyU.envRrs).mul(Ed));

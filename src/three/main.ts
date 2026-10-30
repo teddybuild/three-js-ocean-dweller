@@ -205,6 +205,8 @@ async function start() {
     fogU.cam.value.set(cp.x, cp.z);
     fogU.rainCell.value.set(fOn ? 0 : rainBeta(S.rain), Math.cos(wdr) * S.wind * 0.8 * elapsed, Math.sin(wdr) * S.wind * 0.8 * elapsed);
     // spray haze from breaking crests: grows from a near gale (~14 m/s) upwards
+    // distant showers under the big cells of partly cloudy skies (an overcast rains in rainCell)
+    fogU.shower.value.set(4e-3 * smoothstep(0.25, 0.4, S.clouds) * (1 - smoothstep(0.8, 0.9, S.clouds)), S.clouds, windOffset[0], windOffset[2]);
     fogU.sprayHaze.value.set(smoothstep(14, 24, S.wind) * 1.8e-3, Math.max(cp.y, 0.5));
     // the bolt seen through the rain: base fog plus the storm side's curtains along the path (the water reads last
     // frame's value, as GL)
@@ -244,6 +246,7 @@ async function start() {
     for (let k = 0; k < cloudPasses; k++) clouds.render(camera, { ...CQ, blend: blend / (1 + k * blend) });
     sky.clouds.value = clouds.screen;
     sky.cloudsEnv.value = clouds.env;
+    sky.showerMap.value = clouds.weatherMap;
     skyU.cloudsOn.value = 1;
     skyU.cloudSize.value.set(clouds.w, clouds.h);
     // crepuscular rays in the haze below the cloud base (as src/main.js uShaft)

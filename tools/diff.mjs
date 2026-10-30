@@ -12,6 +12,8 @@ import { launch, openApp } from './browser.mjs';
 const SCENES = {
   breeze: 'preset=breeze&float=0',
   calm: 'preset=calm&yaw=60&float=0',
+  // distant showers under the big fair-weather cells (yaw 270 faces three of them at t 3 s)
+  showers: 'preset=breeze&float=0&yaw=270&pitch=2',
   squall: 'preset=breeze&float=0&front=1&frontDist=15000&frontAz=60&yaw=60&pitch=3&frontLen=8000&frontDepth=4000&frontWidth=1000&sTop=3500&sBase=900',
   // the clear sky alone (milestone 2): no clouds, camera 10 deg up, metrics over the top rows only
   clear: 'preset=breeze&float=0&clouds=0&pitch=10',
@@ -30,7 +32,7 @@ const SCENES = {
 const CROP = { clear: 0.68 };
 // PSNR floors of ported scenes: below it the run fails (2026-10-29 with MSAA: clear 49.8, sea 37.3, breeze 37.3, calm
 // 47.9, squall 45.9, rain 43.5, storm 43.2, night 41.9, stormfloat 41.5, rt 37.3 dB)
-const MIN_PSNR = { clear: 38, sea: 30, breeze: 30, calm: 38, squall: 35, rain: 35, storm: 35, night: 35, stormfloat: 35, rt: 30 };
+const MIN_PSNR = { showers: 30, clear: 38, sea: 30, breeze: 30, calm: 38, squall: 35, rain: 35, storm: 35, night: 35, stormfloat: 35, rt: 30 };
 const W = 1280, H = 720, WARM = 3, DT = 1 / 30, FRAMES = Math.round(WARM / DT);
 // GL names the device; WebGPU redacts it to vendor + architecture, which on this one-GPU box is the 5080
 const EXPECT = { vendor: /nvidia/i, device: process.env.EXPECT_GPU || 'RTX 5080', architecture: process.env.EXPECT_GPU_ARCH || 'blackwell' };

@@ -21,7 +21,7 @@ How the port is built and checked. Decision: `docs/adr/0001-three-webgpu-port.md
   irradiance are compute kernels writing half-float storage textures texel by texel (row y is v = (y + 0.5) / h, as
   in GL). The environment gets its mips from three's storage-texture auto-mips, which run when the texture is next
   sampled, so the irradiance pass is a separate `compute()` call. The background is the clear-sky branch of
-  `SKY_FS` (`scene.backgroundNode`) with the clouds (M4), the crepuscular rays (`sky.withShafts`, M4) and the rain, mist, squall curtains and spray
+  `SKY_FS` (`scene.backgroundNode`) with the clouds (M4), the crepuscular rays (`sky.withShafts`, M4) and the rain, mist, squall curtains, distant showers and spray
   haze (`sky.fog(dir, dist)` -> `{ T, Lf }`, `applyFog` = col T + Lf, M5). The background fogs sky and clouds
   separately, the clouds only to their mean distance (`sky.cloudDepth`). `src/sky/atmosphere.js` exports
   `mediumFor()` for both engines.
@@ -79,7 +79,8 @@ How the port is built and checked. Decision: `docs/adr/0001-three-webgpu-port.md
   Relative RMS with rgb and alpha apart, plus the three/GL ratio of the channel means. `--self-test`: a shape slice
   against another slice must fail.
 - `diff.mjs` scene `clear` (no clouds, pitch 10) compares the top 68 % of rows and fails below 38 dB PSNR; scenes
-  `sea` (no clouds, pitch 1.5, mostly water) and `breeze` (clouds) fail below 30 dB; `squall`, `rain` (downpour,
+  `sea` (no clouds, pitch 1.5, mostly water), `breeze` (clouds) and `showers` (breeze at yaw 270, facing three
+  distant showers) fail below 30 dB; `squall`, `rain` (downpour,
   wind 20) and `storm` (forced ground strike) below 35 dB.
 - Headless Chrome 156 on Linux gets a hardware WebGPU adapter (nvidia blackwell) only with `--use-angle=vulkan
   --enable-features=Vulkan --enable-unsafe-webgpu` (`tools/browser.mjs`).

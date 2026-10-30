@@ -475,6 +475,17 @@ float rainCell(vec2 xz) {
   float n = fogNoise2(q / 6000.0) * 0.65 + fogNoise2(q / 2300.0 + 7.3) * 0.35;
   return 0.08 + 1.6 * smoothstep(0.4, 0.78, n);
 }
+// Showers under the biggest fair-weather clouds, kilometres off: the cores of the tall, large cells of the
+// clouds' weather map (the coverage lookup of cloudDensityR) rain in grey columns into the sea
+uniform sampler2D uShowerMap;   // the clouds' weather map
+uniform vec4 uShower;           // x: extinction in a shower core (1/m, 0 = off), y: coverage, zw: cloud wind offset xz (m)
+float showerAt(vec2 xz) {
+  vec4 wm = textureLod(uShowerMap, (xz + uShower.zw) / 30000.0, 4.0);
+  float cov = uShower.y;
+  float c = smoothstep(1.0 - cov - 0.18, 1.0 - cov + 0.2, wm.r * 0.85 + wm.b * 0.25 * cov);
+  // (~3% of the map at any coverage: the cells' peaks, with tall tops, under cloud)
+  return smoothstep(0.6, 0.8, wm.r) * smoothstep(0.5, 0.7, wm.g) * smoothstep(0.3, 0.6, c);
+}
 vec3 applyFog(vec3 col, vec3 dir, float dist) {
   float L = fogPathLength(dir, dist);
   float tau = uFogDensity * L;
@@ -533,6 +544,27 @@ vec3 applyFog(vec3 col, vec3 dir, float dist) {
     stormFrac *= mix(0.92 + 0.16 * streak, 0.72 + 0.5 * streak, near);
     tcurtain = max(tc, 0.0);
   }
+  // the showers' optical depth and its mean distance (32 steps from 4 km to the base or 40 km, jittered per
+  // pixel by interleaved gradient noise: even steps alias into hard stripes). Upward rays ignore dist: a cloud
+  // never stands in front of the rain below its base, and the half-resolution cloud depth would cut blocks.
+  float tsh = 0.0, dsh = 0.0;
+  if (uShower.x > 0.0) {
+    float t0 = 4000.0, t1 = min(dir.y > 0.0 ? uFogTop / dir.y : dist, 40000.0);
+    if (t1 > t0) {
+      float dt = (t1 - t0) / 32.0;
+      float jit = fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715))));
+      for (int i = 0; i < 32; i++) {
+        float t = t0 + (float(i) + jit) * dt;
+        // (fading into the cloud base, and in from 4 km: showers stay distant columns, never a veil overhead)
+        float k = showerAt(uFogCam + dir.xz * t) * (1.0 - smoothstep(0.75 * uFogTop, uFogTop, dir.y * t)) * smoothstep(4000.0, 8000.0, t);
+        tsh += k * dt;
+        dsh += k * dt * t;
+      }
+      dsh /= max(tsh, 1e-6);
+      tsh *= uShower.x;
+      tau += tsh;
+    }
+  }
   // wind-borne spray hugging the sea (scale height H ~ 20 m): integral of exp(-h/H) along the ray
   if (uSprayHaze.x > 0.0) {
     const float Hs = 25.0;
@@ -559,6 +591,14 @@ vec3 applyFog(vec3 col, vec3 dir, float dist) {
     if (uLightMag > -20.0) aLc *= 0.6;
     curtain = curtain * aTc + aLc;
   }
-  return mix(mix(fogRadiance(dir, uHazeSun), curtain, sf), col, T);
+  // a shower stands in its cloud's shadow: diffuse light, a little sun through its sides, haze in front
+  float shf = min(tsh / max(tau, 1e-6), 1.0 - sf);
+  vec3 shower = vec3(dot(fogRadiance(dir, 0.3), vec3(0.2126, 0.7152, 0.0722))) * vec3(0.93, 0.97, 1.03) * 0.5;
+  if (shf > 0.0) {
+    vec3 aLs, aTs;
+    aerial(dir, dsh * 1e-3, aLs, aTs);
+    shower = shower * aTs + aLs;
+  }
+  return mix(mix(fogRadiance(dir, uHazeSun), curtain, sf) * (1.0 - shf) + shower * shf, col, T);
 }
 `;
