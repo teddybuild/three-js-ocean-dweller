@@ -530,7 +530,7 @@ export class WaterMesh {
       // light shafts through cloud gaps in the haze between the camera and this point
       col.assign(sky.withShafts(col, u.camPos, V.negate(), dist));
       // rain / mist fog
-      col.assign(sky.applyFog(col, V.negate(), dist));
+      col.assign(sky.applyFog(col, V.negate(), dist, undefined, true));
       return vec4(select(u.debug.equal(1), dbgFoam, col), 1);
     })();
   }

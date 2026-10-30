@@ -253,8 +253,9 @@ export class SkyCompute {
   }
 
   // GL applyFog as its two parts: col through dist metres along dir becomes col * T + Lf. fc: GL's gl_FragCoord (y up),
-  // the showers' jitter; compute kernels pass their texel.
-  fog(dir: Node, dist: Node, fc: Node = vec2(screenCoordinate.x, screenSize.y.sub(screenCoordinate.y))) {
+  // the showers' jitter; compute kernels pass their texel. solid: dist is a real surface (the sea), which every ray
+  // stops at, upward ones too (a wave crest above a camera in the trough)
+  fog(dir: Node, dist: Node, fc: Node = vec2(screenCoordinate.x, screenSize.y.sub(screenCoordinate.y)), solid = false) {
     const f = fogU, sun = atmoU.sun;
     // the veil only exists below the cloud base
     const L = min(dist, select(dir.y.greaterThan(0), f.top.div(max(dir.y, 0.015)), 1e9)).toVar();
@@ -318,11 +319,12 @@ export class SkyCompute {
       tcurtain.assign(tcp);
     });
     // the showers' optical depth and its mean distance (32 steps from 4 km to the base or 40 km, jittered per pixel by
-    // interleaved gradient noise: even steps alias into hard stripes). Upward rays ignore dist: a cloud never stands in
-    // front of the rain below its base, and the half-resolution cloud depth would cut blocks.
+    // interleaved gradient noise: even steps alias into hard stripes). Upward rays ignore a cloud's dist: a cloud never
+    // stands in front of the rain below its base, and the half-resolution cloud depth would cut blocks.
     const tsh = float(0).toVar(), dsh = float(0).toVar();
     If(f.shower.x.greaterThan(0), () => {
-      const t1 = min(select(dir.y.greaterThan(0), f.top.div(max(dir.y, 1e-6)), float(dist)), 40000).toVar();
+      const tUp = select(dir.y.greaterThan(0), f.top.div(max(dir.y, 1e-6)), float(dist));
+      const t1 = min(solid ? min(tUp, dist) : tUp, 40000).toVar();
       If(t1.greaterThan(4000), () => {
         const dt = t1.sub(4000).div(32).toVar();
         const jit = fract(fract(dot(fc, vec2(0.06711056, 0.00583715))).mul(52.9829189)).toVar();
@@ -375,8 +377,8 @@ export class SkyCompute {
     const Lf = mix(this.fogRadiance(dir, atmoU.hazeSun), curtain, sf).mul(shf.oneMinus()).add(shower.mul(shf)).mul(T.oneMinus()).toVar();
     return { T, Lf };
   }
-  applyFog(col: Node, dir: Node, dist: Node, fc?: Node) {
-    const { T, Lf } = this.fog(dir, dist, fc);
+  applyFog(col: Node, dir: Node, dist: Node, fc?: Node, solid = false) {
+    const { T, Lf } = this.fog(dir, dist, fc, solid);
     return col.mul(T).add(Lf);
   }
 
