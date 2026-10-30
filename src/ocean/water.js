@@ -6,6 +6,10 @@ import { SKY_LOOKUP_GLSL } from '../sky/atmosphere.js';
 import { FOAM_GLSL } from './foam.js';
 import { RAIN_SURFACE_GLSL } from '../fx/ripples.js';
 
+// Sea grade: reflected sky and water body x SEA_GRADE; sun glints and foam stay full. "Darker grade" (owner,
+// 2026-10-29), shared by both engines (src/three/water.ts).
+export const SEA_GRADE = 0.7;
+
 const VS = `
 layout(location = 0) in vec2 aPolar; // radius (m), angle (rad)
 uniform mat4 uViewProj;
@@ -323,7 +327,7 @@ void main() {
   // submerged bubbles backscatter strongly: the water around and beneath whitecaps turns pale aquamarine
   float pl = (1.0 - exp(-plume * uFoamAmount * 1.8)) * (1.0 - smoothstep(150.0, 900.0, dist) * 0.6);
   body += (1.0 - F) * pl * vec3(0.035, 0.062, 0.053) * Ed / M_PI;
-  vec3 col = refl * uDbgMask.x + sun * uDbgMask.y + (body + sss) * uDbgMask.z;
+  vec3 col = (refl * uDbgMask.x + (body + sss) * uDbgMask.z) * ${SEA_GRADE.toFixed(3)} + sun * uDbgMask.y;
   col += (1.0 - F) * uRain * 0.008 * smoothstep(3.0, 40.0, dist) * (uSkyE + uSunE * sunVis * max(L.y, 0.0)) / M_PI;
 
   // foam

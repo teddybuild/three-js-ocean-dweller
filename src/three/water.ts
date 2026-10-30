@@ -10,6 +10,7 @@ import * as TSL from 'three/tsl';
 import { atmoU } from './atmosphere';
 import type { SkyCompute } from './sky';
 import { foamCoverage } from './foam';
+import { SEA_GRADE } from '../ocean/water.js';
 
 type Node = any; // @types/three's TSL overloads reject long node chains, so nodes and TSL functions are untyped
 const {
@@ -496,7 +497,7 @@ export class WaterMesh {
       // submerged bubbles backscatter strongly: the water around and beneath whitecaps turns pale aquamarine
       const pl = exp(plume.mul(u.foamAmount).mul(-1.8)).oneMinus().mul(smoothstep(150, 900, dist).mul(0.6).oneMinus());
       body.addAssign(F.oneMinus().mul(pl).mul(vec3(0.035, 0.062, 0.053)).mul(Ed).div(M_PI));
-      const col = refl.mul(u.dbgMask.x).add(sun.mul(u.dbgMask.y)).add(body.add(sss).mul(u.dbgMask.z)).toVar();
+      const col = refl.mul(u.dbgMask.x).add(body.add(sss).mul(u.dbgMask.z)).mul(SEA_GRADE).add(sun.mul(u.dbgMask.y)).toVar();
       col.addAssign(F.oneMinus().mul(u.rain).mul(0.008).mul(smoothstep(3, 40, dist)).mul(skyE.add(sunE.mul(sunVis).mul(max(L.y, 0)))).div(M_PI));
 
       // foam
