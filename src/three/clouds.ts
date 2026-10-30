@@ -345,7 +345,7 @@ export class CloudsCompute {
           const axis = vec2(sin(tt.mul(4).add(sd)), cos(tt.mul(3.1).add(sd.mul(1.7)))).mul(300).mul(smoothstep(0.1, 0.5, tt));
           const nb = texture3D(this.shape, pw.div(3000).add(0.61)).level(this.lodFor(cx, 3000 / 128));
           const bub = clamp(nb.g.mul(0.6).add(nb.b.mul(0.4)).sub(0.55).div(0.3), 0, 1);
-          const ct = smoothstep(renv.add(80), renv.sub(80), length(tw.xy.sub(axis)).sub(bub.mul(400)));
+          const ct = smoothstep(renv.sub(80), renv.add(80), length(tw.xy.sub(axis)).sub(bub.mul(400))).oneMinus();
           dT.assign(ct.mul(smoothstep(0, float(110).div(tw.z), tt)).mul(mix(0.6, 1, n.r)));
         });
         // vertical profile. Fair weather: cumulus towers with type-dependent tops. Storm: a layer deck whose base
@@ -653,9 +653,10 @@ export class CloudsCompute {
       const L = normalize(vec3(sun.x, max(sun.y, 0.03), sun.z)).toVar();
       const tb = this.shellBase().div(L.y).toVar(), tt = this.shellTop().div(L.y);
       const cx: Ctx = { pa: { pixelAngle: float(0), detailFoot: float(0), upSteps: float(0) }, gFoot: float(sz / 256).toVar() };
-      const dt = tt.sub(tb).div(16).toVar();
+      // (32 steps: the towers raise the shell top ~2 km, and 16 steps across it would step past a tower's column)
+      const dt = tt.sub(tb).div(32).toVar();
       const tau = float(0).toVar();
-      Loop(16, ({ i }: Node) => {
+      Loop(32, ({ i }: Node) => {
         const p = p0.add(L.mul(tb.add(float(i).add(0.5).mul(dt)))).toVar();
         tau.addAssign(this.density(cx, p, p.y, false).mul(dt));
       });
