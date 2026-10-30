@@ -5,7 +5,7 @@ the why and the numbers go in the commit message and the day's `docs/log/` file.
 
 - 2026-10-29 20:50 Distant showers no longer paint over wave crests seen from a trough. `7e09893`
 - 2026-10-29 20:50 WebGL2 engine archived in `archive/gl/` (tag `gl-final`); diff.mjs compares three.js to saved frames; tools/shot.mjs for three. `a9c56c0`
-- 2026-10-29 20:50 Congestus towers fitted to the owner's sketch (local branch `towers-wip`, awaiting the owner's look). `a37f5b5`
+- 2026-10-29 20:50 Congestus towers fitted to the owner's sketch. `a37f5b5`
 - 2026-10-29 20:25 Cloud sketch pad `tools/cloud-sketch.html`: paint or trace a tower side view, measures height, width profile, puff radii, saves JSON. `4b2321d`
 - 2026-10-29 20:05 Default engine is three.js WebGPU (the owner's parity call); GL at `?engine=gl`. `b5ddd9d`
 - 2026-10-29 19:58 Distant rain showers under the big fair-weather cells (coverage 0.25-0.9), both engines; new diff scene `showers`. `cd491a5`
