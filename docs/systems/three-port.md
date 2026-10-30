@@ -4,7 +4,8 @@ How the port is built and checked. Decision: `docs/adr/0001-three-webgpu-port.md
 
 ## Layout
 
-- `src/boot.ts` picks the engine. `?engine=three` loads `src/three/main.ts`; anything else loads `src/main.js`.
+- `src/boot.ts` picks the engine. `?engine=gl` loads `src/main.js`; anything else loads `src/three/main.ts` (default
+  since 2026-10-29, the owner's parity call). `tools/browser.mjs` `openApp` adds `engine=gl` to a URL that names no engine.
 - Both engines set `window.engine` = `{ name, step(n, dt), capture(), errors, adapter }`. `step` runs `n` fixed
   steps of the engine's own clock and awaits the GPU and pending error scopes; `capture` renders once and returns a
   PNG data URL read in the same task. A fresh page is the reset; seeds are fixed in code.

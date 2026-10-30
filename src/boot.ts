@@ -1,5 +1,5 @@
-// Picks the renderer: ?engine=three is the three.js WebGPU port (docs/systems/three-port.md),
-// anything else the open-water WebGL2 reference in src/main.js.
+// Picks the renderer: the three.js WebGPU port (docs/systems/three-port.md) by default, ?engine=gl the open-water
+// WebGL2 reference in src/main.js (default flipped on the owner's parity call, docs/adr/0001-three-webgpu-port.md).
 // Both expose window.engine for tools/diff.mjs: step(n, dt) runs n fixed frames of the engine's own clock and awaits
 // the GPU; capture(dt) runs exactly one more frame and returns it as a PNG data URL, so both engines render the same
 // frame count. `frames` counts frames run. A fresh page is the reset; seeds are fixed in code.
@@ -20,7 +20,7 @@ declare global {
   interface Window { engine?: Engine; app?: any; portTest?: any }
 }
 
-if (new URLSearchParams(location.search).get('engine') === 'three') {
+if (new URLSearchParams(location.search).get('engine') !== 'gl') {
   import('./three/main');
 } else {
   import('./main.js').then(() => {

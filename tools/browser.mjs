@@ -59,6 +59,8 @@ export async function openApp(browser, url, { width, height, beforeLoad }) {
   });
   page.on('pageerror', (e) => { page.collectedErrors.push(e.message); console.log('[pageerror]', e.message); });
   if (beforeLoad) await page.evaluateOnNewDocument(beforeLoad);
+  // the upstream probes read the GL app (app.gl): a URL that names no engine gets the WebGL2 reference
+  if (!/[?&]engine=/.test(url)) url += (url.includes('?') ? '&' : '?') + 'engine=gl';
   await page.goto(url, { waitUntil: 'load', timeout: 120000 });
   await page.waitForFunction(() => window.app || window.engine || document.querySelector('.err'), { timeout: 60000 });
   const err = await page.evaluate(() => document.querySelector('.err')?.textContent);

@@ -15,8 +15,8 @@ for browser and Electron, on WebGPU.
 
 - three `0.186.1` (MIT), `WebGPURenderer` + TSL + `RenderPipeline`. `@types/three` `0.186.0` (MIT).
 - WebGPU only. The renderer refuses three's WebGL2 fallback (`src/three/main.ts`).
-- New code in `src/three/` (TS). `src/boot.ts` picks the engine: `?engine=three` or the WebGL2 reference (default).
-  The default flips only when the owner approves parity.
+- New code in `src/three/` (TS). `src/boot.ts` picks the engine: the WebGPU port, or `?engine=gl` for the WebGL2
+  reference. The default flipped to three on 2026-10-29: Owner approved parity ("Yes, merge flip").
 - Hand port, milestone order from the Codex plan review: harness, FFT alone, atmosphere + sky + exposure, water,
   clouds, weather fx, parity (`docs/systems/three-port.md`).
 - Each milestone ends with `pnpm check` and `node tools/diff.mjs`, then a `port-m<N>` tag. Independent Codex and agy
