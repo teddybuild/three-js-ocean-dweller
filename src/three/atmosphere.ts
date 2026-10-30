@@ -4,7 +4,7 @@
 // Units: kilometres; radiance relative to a solar illuminance of 1.
 import * as THREE from 'three/webgpu';
 import * as TSL from 'three/tsl';
-import { mediumFor } from '../sky/atmosphere.js';
+import { mediumFor } from '../sky/medium.js';
 
 type Node = any; // @types/three's TSL overloads reject long node chains, so nodes and TSL functions are untyped
 const {

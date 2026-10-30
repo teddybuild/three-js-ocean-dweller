@@ -4,13 +4,13 @@ Module contracts, data flow, and the invariants every change must keep.
 
 ## Modules
 
-- `src/main.js` - creates the WebGL2 context, owns the frame loop and camera, wires every module below.
-- `src/gl.js` - minimal WebGL2 toolkit: programs, textures, targets, fullscreen passes.
-- `src/ocean/` - `ocean.js` 4-cascade Tessendorf FFT; `water.js` surface mesh and shading; `foam.js`; `probe.js`
-  samples height and slope under a boat-sized footprint without stalling (the hook for a boat later).
-- `src/sky/` - `atmosphere.js` LUTs, `clouds.js` volumetric clouds, `sky.js`.
-- `src/fx/` - rain, ripples, spray, lightning, `post.js` (bloom, eye adaptation, AgX).
-- `src/weather.js` presets and transitions; `src/film.js` the scripted 60 s film; `src/ui.js`; `src/audio/`.
+- `src/boot.ts` starts `src/three/main.ts`, which owns the WebGPU renderer, frame loop and camera and wires the rest.
+- `src/three/` - `ocean.ts` 4-cascade Tessendorf FFT (compute); `water.ts` surface; `foam.ts`; `probe.ts` height and
+  slope under a footprint; `atmosphere.ts` LUTs; `clouds.ts` volumetric clouds; `sky.ts` sky, env and fog; `rain.ts`,
+  `spray.ts`, `lightning.ts`; `post.ts` (bloom, eye adaptation, AgX). Spec: `docs/systems/three-port.md`.
+- Shared plain JS: `src/weather.js` presets and transitions; `src/film.js` the scripted 60 s film; `src/ui.js`;
+  `src/audio/`; `src/math.js`; `src/ocean/spectrum.js` (cascades, CPU spectrum stats); `src/sky/medium.js` (haze).
+- `archive/gl/` - the upstream WebGL2 engine, archived 2026-10-29 (owner). Reference only; tag `gl-final` runs it.
 
 ## Data flow
 

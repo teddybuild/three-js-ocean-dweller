@@ -4,7 +4,7 @@
 // direction: a uniform rewritten between dispatches is overwritten before submit (docs/status/lessons.md).
 import * as THREE from 'three/webgpu';
 import * as TSL from 'three/tsl';
-import { cascadesFor, computeStats } from '../ocean/ocean.js';
+import { cascadesFor, computeStats } from '../ocean/spectrum.js';
 import { rng } from '../math.js';
 
 type Node = any; // @types/three's TSL overloads reject long node chains, so nodes and TSL functions are untyped

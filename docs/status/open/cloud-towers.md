@@ -4,14 +4,10 @@ Owner, 2026-10-29: "10% of random clouds need to have random tallness towers", "
 tallness", "they need to be puffier lol". References: two Pexels photos (pexels-lu62-13399746.jpg,
 pexels-paul-voie-14084753.jpg): piles of rounded bubbles at several sizes, broad bases, shadowed crevices.
 
-- Tries and why they failed: `docs/log/2026-10-29-three-port.md` "Cloud towers". Codex + agy advice:
-  `tmp/tower/codex.md`, `tmp/tower/agy.md` (local only; summary in the log).
-- WIP: LOCAL branch `towers-wip` (`98c5f47`): weather map alpha = tower footprint, shell top + 3 km, tower coverage
-  from rescaled inverted-Worley bubbles biased by the 2D envelope, sky-light `max(1 - hf, 0)` fix. GL only is
-  current; `src/three/clouds.ts` there is an older column version (out of parity). Last GL shots: bubbles but
-  frayed, floating fragments above the towers (`tmp/tower/sheet.png`).
-- Plan: Owner draws towers in http://localhost:5173/tools/cloud-sketch.html (or traces the photos) and saves JSON to
-  `cloud-sketch-*.json`. Fit from it: width vs height profile -> footprint radius vs height, puff radius
-  median -> bubble noise scale, aspect -> tower height. Then port to three, `cloud-diff`, diff all 11.
-- Done: towers on ~10% of clouds in breeze, puffy (rounded lobes with shading), grouped heights, both engines,
-  diff scenes pass.
+- Tries and why they failed: `docs/log/2026-10-29-three-port.md` "Cloud towers".
+- Now (local branch `towers-wip`, `src/three/clouds.ts`): one candidate tower per 5 km cell (60%, centre in cloud),
+  radius from the owner's sketch (`cloud-sketch-tower-1.json`: 3.6 km tall, 2.2 km base, column 0.47 of the
+  base, dome over the top 12%), axis wanders 300 m, outline pushed out up to 400 m by ~750 m bubbles. No floating
+  fragments. Diff scene `towers` (yaw 200).
+- Left: The owner's look at it live; more sketches (one so far) would set the height spread; check the ~10% share.
+- Done: towers on ~10% of clouds in breeze, puffy (rounded lobes with shading), grouped heights, the owner approves.

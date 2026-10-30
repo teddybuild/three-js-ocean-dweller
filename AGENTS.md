@@ -34,8 +34,9 @@ checks) before creating it.
 | `docs/adr/` | one decision per file, `NNNN-slug.md`, indexed in `README.md` |
 | `docs/status/` | `README.md`, `CHANGELOG.md`, `handoffs/` (newest only), `open/`, `lessons.md`, `rulings.md` |
 | `docs/log/` | dated work notes and research, `YYYY-MM-DD-topic.md` |
-| `src/` | upstream open-water modules (plain JS, embedded GLSL); new code is TS |
-| `src/three/` | the three.js WebGPU port (TS), `docs/systems/three-port.md` |
+| `src/` | the app: `boot.ts`, shared plain-JS modules (weather, UI, film, audio, math, ocean spectrum, sky medium) |
+| `src/three/` | the three.js WebGPU renderer (TS, TSL shaders), `docs/systems/three-port.md`; all rendering work goes here |
+| `archive/gl/` | the archived open-water WebGL2 engine and its GL-based tools. Reference only: never edit, never import. Tag `gl-final` runs it |
 | `public/audio/` | recorded rain and thunder (`CREDITS.md`), served at `/audio/` |
 | `tools/`, `render/` | upstream puppeteer probes and the offline film renderer; they expect the dev server on :5173 |
 | `media/` | upstream README images and film |
@@ -52,15 +53,14 @@ history and numbers go in the day's `docs/log/` file.
 
 - `pnpm check` - the gate (`tsc --noEmit && vite build`). Must pass before any push.
 - `pnpm dev` - dev server on http://localhost:5173 (port fixed for `tools/`). `pnpm preview` serves `dist/` on :4173.
-- URL flags: see `src/main.js` (`?render`, presets). The WebGPU port is the default; `?engine=gl` runs the WebGL2 reference.
-- `node tools/diff.mjs [scene ...] [--self-test]` - renders both engines, writes `tmp/diff/<scene>.png`, prints PSNR.
-- `node tools/fft-diff.mjs [--self-test]` - the three.js FFT ocean against a CPU DFT and against the GL ocean.
-- `node tools/lut-diff.mjs [--self-test]` - the three.js atmosphere LUTs, env and irradiance against GL.
-- `node tools/live-three.mjs` - the three.js live path: loop, UI, drag, errors, thunder audio.
-- `node render/render.mjs [--engine three] [--from s --to s --w --h --fps --out]` - the offline film (dev server on :5173).
+- URL flags: see `src/three/main.ts` (`?render`, presets, `yaw`, `pitch`, `elev`, any weather key).
+- `node tools/shot.mjs "<query>" out.png [w h seconds]` - one three.js frame to a PNG (headless, deterministic).
+- `node tools/diff.mjs [scene ...|all] [--update] [--self-test]` - each scene against its saved reference frame
+  (`tmp/diff/ref/`): `--update` on a clean commit first, then the change; writes `tmp/diff/<scene>.png` (ref | now).
+- `node tools/live-three.mjs` - the live path: loop, UI, drag, errors, thunder audio.
+- `node render/render.mjs [--from s --to s --w --h --fps --out]` - the offline film (dev server on :5173).
 - http://localhost:5173/tools/cloud-sketch.html - paint a cloud side view in metres (or trace a photo); measures
   height, width profile and puff radii, saves JSON + PNG for fitting the cloud shader.
-- `node tools/cloud-diff.mjs [--self-test]` - the three.js cloud volumes, weather, shadow, env and screen against GL.
 
 ## Workflow
 

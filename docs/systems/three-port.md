@@ -4,17 +4,17 @@ How the port is built and checked. Decision: `docs/adr/0001-three-webgpu-port.md
 
 ## Layout
 
-- `src/boot.ts` picks the engine. `?engine=gl` loads `src/main.js`; anything else loads `src/three/main.ts` (default
-  since 2026-10-29, the owner's parity call). `tools/browser.mjs` `openApp` adds `engine=gl` to a URL that names no engine.
-- Both engines set `window.engine` = `{ name, step(n, dt), capture(), errors, adapter }`. `step` runs `n` fixed
+- `src/boot.ts` loads `src/three/main.ts`, the only engine. The WebGL2 engine and its parity tools are in
+  `archive/gl/` (2026-10-29, "archive GL in a folder and stop touching it", owner); tag `gl-final` runs it.
+- The engine sets `window.engine` = `{ name, step(n, dt), capture(), errors, adapter }`. `step` runs `n` fixed
   steps of the engine's own clock and awaits the GPU and pending error scopes; `capture` renders once and returns a
   PNG data URL read in the same task. A fresh page is the reset; seeds are fixed in code.
 - Clock: the three engine owns `elapsed` and the `uTime` uniform (`src/three/main.ts`). Every animated node reads
   `uTime`; three's `time` node and NodeFrame follow the wall clock and are never used (Codex M0 review, P1).
 - Errors (three): `uncapturederror`, device loss, a validation error scope around every frame, and three's own
   logged errors via `THREE.setConsoleFunction` (three catches pipeline errors in its own scopes and only logs them).
-- Reused unchanged by both engines: `src/weather.js`, `src/film.js`, `src/ui.js`, `src/audio/`; from
-  `src/ocean/ocean.js`, `cascadesFor()` (bands) and `computeStats()` (foam threshold stats).
+- Shared plain JS: `src/weather.js`, `src/film.js`, `src/ui.js`, `src/audio/`; `src/ocean/spectrum.js`,
+  `cascadesFor()` (bands) and `computeStats()` (foam threshold stats).
 - Ocean (`src/three/ocean.ts`, M1): open-water's spectrum, evolve, Stockham FFT and assemble as TSL compute over
   f32 storage buffers indexed `y * N + x`. One ComputeNode per cascade, FFT stage and ping-pong direction, all
   uniforms set before the frame's one `renderer.compute([...])`. Not drawn yet; `window.portTest` drives it.
@@ -24,8 +24,8 @@ How the port is built and checked. Decision: `docs/adr/0001-three-webgpu-port.md
   sampled, so the irradiance pass is a separate `compute()` call. The background is the clear-sky branch of
   `SKY_FS` (`scene.backgroundNode`) with the clouds (M4), the crepuscular rays (`sky.withShafts`, M4) and the rain, mist, squall curtains, distant showers and spray
   haze (`sky.fog(dir, dist)` -> `{ T, Lf }`, `applyFog` = col T + Lf, M5). The background fogs sky and clouds
-  separately, the clouds only to their mean distance (`sky.cloudDepth`). `src/sky/atmosphere.js` exports
-  `mediumFor()` for both engines.
+  separately, the clouds only to their mean distance (`sky.cloudDepth`). `src/sky/medium.js` exports
+  `mediumFor()`.
 - Post (`src/three/post.ts`, M2): open-water's bloom pyramid, metering, eye adaptation and AgX composite as QuadMesh
   passes; the scene renders into a half-float target first. The composite runs with `NoToneMapping` and the working
   colour space so three adds no second tone map or sRGB encode. NaN/Inf tests are bit tests (`src/three/tsl-util.ts`).
@@ -59,36 +59,23 @@ How the port is built and checked. Decision: `docs/adr/0001-three-webgpu-port.md
 
 ## Checks
 
-- `node tools/diff.mjs [scene ...] [--self-test]` (dev server on :5173). Fresh page per capture, `?render`, 90 steps
-  of 1/30 s at 1280x720, `float=0` so the GL camera holds still. Writes `tmp/diff/<scene>.png` (gl left, three
-  right), prints PSNR and pixelmatch mismatch %. `verdict()` fails the run on: any page, WebGL or WebGPU error, a
-  capture that is not 1280x720 or is one colour, a frame count or NodeFrame count other than 90, a GL renderer that
-  is not the RTX 5080 (`EXPECT_GPU`), a WebGPU adapter that is not nvidia/blackwell (`EXPECT_GPU_ARCH`) or is a
-  fallback. Low PSNR is progress, not failure. `--self-test` runs 18 synthetic known-bad cases and 3 live ones.
-  Scenes: the `SCENES` table (incl. `night` at elev -12, `stormfloat` with the floating camera, `rt` the live tier),
-  or any raw query string.
+- `node tools/diff.mjs [scene ...|all] [--update] [--self-test]` (dev server on :5173). Fresh page per capture,
+  `?render`, 90 steps of 1/30 s at 1280x720, `float=0` except `stormfloat`. `--update` saves each frame as the
+  scene's reference (`tmp/diff/ref/`); without it each frame is compared to its reference, `tmp/diff/<scene>.png` is
+  ref | now, and PSNR under 45 dB fails. `verdict()` also fails on: any page or WebGPU error, a capture that is not
+  1280x720 or is one colour, a frame or NodeFrame count other than 90, an adapter that is not nvidia/blackwell
+  (`EXPECT_GPU_ARCH`) or is a fallback. `--self-test` runs 15 synthetic known-bad cases and 2 live ones. Scenes: the
+  `SCENES` table (incl. `showers`, `towers`, `night` at elev -12, `rt` the live tier), or any raw query string.
+- `node tools/shot.mjs "<query>" out.png [w h seconds]`: one frame after `seconds` of fixed steps, for looking.
 - `node tools/live-three.mjs`: the live path (no `?render`, q=rt, rAF loop) for 6 s in a storm with a strike at 2 s;
   fails on errors, under 5 fps, a stopped AudioContext, or no thunder.
-- `node tools/fft-diff.mjs [--self-test]`: the bare FFT at 128/256/512 against a CPU DFT (impulse, single mode,
-  noise), then every cascade's h0, disp, foam, slope and active buffers against a fresh GL `Ocean` after 3 steps of
-  the breeze spectrum. Limits are relative RMS: 1e-5 for f32 against f32, 2e-3 (5e-3 foam) against GL's f16 targets.
-  `--self-test` adds a forward-transform reference and a swapped cascade, which must fail.
-- `node tools/lut-diff.mjs [--self-test]`: the 4 LUTs, env, envDeck and irradiance against fresh GL objects at sun
-  11/45/2/-4 deg, relative RMS limit 1e-3. An all-zero reference fails (`tools/compare.mjs`).
-- `node tools/cloud-diff.mjs [--self-test]`: 90 breeze frames in both engines, then the shape and detail volumes (3
-  z slices per mip), every weather-map mip, the shadow map, env clouds and the screen buffer with its distance.
-  Relative RMS with rgb and alpha apart, plus the three/GL ratio of the channel means. `--self-test`: a shape slice
-  against another slice must fail.
-- `diff.mjs` scene `clear` (no clouds, pitch 10) compares the top 68 % of rows and fails below 38 dB PSNR; scenes
-  `sea` (no clouds, pitch 1.5, mostly water), `breeze` (clouds) and `showers` (breeze at yaw 270, facing three
-  distant showers) fail below 30 dB; `squall`, `rain` (downpour,
-  wind 20) and `storm` (forced ground strike) below 35 dB.
+- Archived with GL (`archive/gl/tools/`): the gl-vs-three `diff.mjs`, `fft-diff`, `lut-diff`, `cloud-diff`.
 - Headless Chrome 156 on Linux gets a hardware WebGPU adapter (nvidia blackwell) only with `--use-angle=vulkan
   --enable-features=Vulkan --enable-unsafe-webgpu` (`tools/browser.mjs`).
 
 ## Resource contracts
 
-Fill one row per GPU resource as it is ported. The GL column comes from the 2026-10-29 inventory.
+Fill one row per GPU resource. The GL column comes from the 2026-10-29 inventory (GL now in `archive/gl/`).
 
 | Resource | GL (src/) | three | Owner | Notes |
 |---|---|---|---|---|

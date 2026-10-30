@@ -17,7 +17,8 @@
     "public",
     "tools",
     "render",
-    "media"
+    "media",
+    "archive"
   ],
   "docsRoot": [
     "PLAN.md",

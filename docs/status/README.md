@@ -11,7 +11,10 @@ Where the project is right now. Read this first, then the newest handoff.
 
 ## Right now (2026-10-29)
 
-three.js WebGPU port: `port-m0`..`port-m5` tagged and pushed; every effect ported, plus MSAA, centroid and thunder audio (all 10 diff scenes 37.3-49.8 dB, `tools/live-three.mjs` ok). Codex + agy reviewed the whole port (no P0, fixes in); app shell ported (UI, input, dynamic resolution, film). Full 60 s film renders in both engines (PSNR 34.5 dB average; error on glints); upstream sky edge fixed (sine hash in the rain cells); sea darker (`SEA_GRADE` 0.7); all 10 diff scenes 36.7-49.7 dB. Gale foam and rain retuned (decay, 600k drops). No open port items. three is the default engine since 2026-10-29 (`?engine=gl` for the reference). Distant rain showers under big fair-weather clouds, both engines (diff scene `showers`). Next: congestus towers, fitted to the owner's sketches from `tools/cloud-sketch.html` (`open/cloud-towers.md`). Spec: `docs/systems/three-port.md`.
+three.js WebGPU is the only engine: the WebGL2 engine is archived in `archive/gl/` (tag `gl-final`, the owner
+2026-10-29). Checks: `tools/diff.mjs` compares three.js against its own saved frames (`--update` on a clean commit
+first), `tools/shot.mjs` takes one frame, `tools/live-three.mjs` the live path. Congestus towers fitted to the owner's
+sketch (`open/cloud-towers.md`); distant showers no longer paint over wave crests. Spec: `docs/systems/three-port.md`.
 
 ## How to update
 

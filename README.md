@@ -207,9 +207,10 @@ ffmpeg/x264 and the soundtrack is muxed in. The timeline is in `src/film.js`.
 ## Layout
 
 ```
-src/ocean/   FFT cascades, spectrum, foam, surface shading, surface probe
-src/sky/     atmosphere LUTs, volumetric clouds, sky and reflection probe
-src/fx/      rain, ripples, spindrift, lightning, post-processing
+src/three/   the three.js WebGPU renderer: ocean FFT, water, foam, sky, clouds, rain, spray, lightning, post
+src/ocean/   ocean spectrum setup shared with the renderer
+src/sky/     atmosphere medium shared with the renderer
+archive/gl/  the original WebGL2 engine (reference only; tag gl-final runs it)
 src/audio/   sound engine (live and offline)
 src/film.js  the film timeline
 tools/       dev server, screenshots, calibration (wave heights, foam coverage), profiling

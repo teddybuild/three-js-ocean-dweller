@@ -38,6 +38,11 @@ for browser and Electron, on WebGPU.
 - Browsers without WebGPU get an error page, not the ocean.
 - Two renderers live in the repo until parity; `src/` upstream files stay untouched apart from local patches.
 
+## Update 2026-10-29
+
+- GL archived: "stop working on GL", "archive GL in a folder and stop touching it" (owner). `archive/gl/`, tag
+  `gl-final`; `?engine=gl` is gone. The regression check compares three.js against its own saved frames.
+
 ## Evidence
 
 - Plan: kept outside the repo.
