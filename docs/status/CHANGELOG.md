@@ -3,6 +3,7 @@
 Every shipped change, newest first: one line each, with its commits. Add a line when a change lands;
 the why and the numbers go in the commit message and the day's `docs/log/` file.
 
+- 2026-11-01 10:08 Film render checked after the GL removal: 5 s, 300 frames, audio, no black frames. `docs/log/2026-11-01-towers-perf.md`
 - 2026-11-01 10:05 Cloud towers closed: Owner, live in breeze at yaw 200, "cloud towers look ok". `a37f5b5` `427023a`
 - 2026-10-29 22:30 Towers: forward smoothstep at the edge, cloud shadow 32 steps so towers cast shadows (Sol review). `427023a`
 - 2026-10-29 20:50 Distant showers no longer paint over wave crests seen from a trough. `7e09893`
