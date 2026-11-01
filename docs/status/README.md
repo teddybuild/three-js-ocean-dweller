@@ -2,19 +2,18 @@
 
 Where the project is right now. Read this first, then the newest handoff.
 
-- **Newest handoff:** [handoffs/2026-10-29-2026.md](handoffs/2026-10-29-2026.md)
+- **Newest handoff:** [handoffs/2026-11-01-0950.md](handoffs/2026-11-01-0950.md)
 - [open/](open/README.md): open items and design questions, in priority order.
 - [CHANGELOG.md](CHANGELOG.md): every shipped change, newest first, one line each with its commits.
 - [lessons.md](lessons.md) and [rulings.md](rulings.md): traps past sessions hit, and the owner's standing calls. Both
   load every session (`CLAUDE.md`).
 - Day logs with every step's numbers and reasons: `docs/log/`.
 
-## Right now (2026-10-29)
+## Right now (2026-11-01)
 
-three.js WebGPU is the only engine: the WebGL2 engine is archived in `archive/gl/` (tag `gl-final`, the owner
-2026-10-29). Checks: `tools/diff.mjs` compares three.js against its own saved frames (`--update` on a clean commit
-first), `tools/shot.mjs` takes one frame, `tools/live-three.mjs` the live path. Congestus towers fitted to the owner's
-sketch (`open/cloud-towers.md`); distant showers no longer paint over wave crests. Spec: `docs/systems/three-port.md`.
+three.js WebGPU is the only engine; the WebGL2 engine is archived in `archive/gl/` (tag `gl-final`). Checks:
+`tools/diff.mjs` (three vs its saved frames), `tools/shot.mjs` (one frame), `tools/live-three.mjs`. Congestus towers
+fitted to the owner's sketch, waiting on the owner's look (`open/cloud-towers.md`). Spec: `docs/systems/three-port.md`.
 
 ## How to update
 

@@ -6,9 +6,9 @@
 ## Overview
 
 Endless cinematic ocean in the browser, the web successor to an earlier Godot project (the owner
-dropped Godot on 2026-10-29). A fork of [Leonxlnx/open-water](https://github.com/Leonxlnx/open-water) (MIT, pure
-WebGL2): FFT ocean, atmosphere, volumetric clouds, rain, lightning, sound. Vite + TypeScript around it; three.js
-comes in with the boat. Runs locally in Chrome. Repo: GitHub `teddybuild/three-js-ocean-dweller` (origin); `upstream` = Leonxlnx/open-water.
+dropped Godot on 2026-10-29). Started as a fork of [Leonxlnx/open-water](https://github.com/Leonxlnx/open-water) (MIT, WebGL2):
+FFT ocean, atmosphere, volumetric clouds, rain, lightning, sound, now ported to three.js on WebGPU (TSL shaders,
+`src/three/`); the WebGL2 original is archived in `archive/gl/`. Vite + TypeScript. Runs locally in Chrome. Repo: GitHub `teddybuild/three-js-ocean-dweller` (origin); `upstream` = Leonxlnx/open-water.
 
 ## Pointers
 

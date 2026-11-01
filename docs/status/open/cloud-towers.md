@@ -10,4 +10,5 @@ pexels-paul-voie-14084753.jpg): piles of rounded bubbles at several sizes, broad
   base, dome over the top 12%), axis wanders 300 m, outline pushed out up to 400 m by ~750 m bubbles. No floating
   fragments. Diff scene `towers` (yaw 200).
 - Left: The owner's look at it live; more sketches (one so far) would set the height spread; check the ~10% share.
+  The sketch pad measures every painted blob as one cloud: one tower per save, or teach it to split blobs.
 - Done: towers on ~10% of clouds in breeze, puffy (rounded lobes with shading), grouped heights, the owner approves.
