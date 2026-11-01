@@ -5,5 +5,4 @@ over this page. New item: a file here plus a line below. Finished: delete its fi
 
 ## Open
 
-1. [cloud-towers.md](cloud-towers.md) - congestus towers, fitted to the owner's first sketch; waiting on the owner's look.
-2. [three-js-boat.md](three-js-boat.md) - parked (ruling 2026-10-29).
+1. [three-js-boat.md](three-js-boat.md) - parked (ruling 2026-10-29).
