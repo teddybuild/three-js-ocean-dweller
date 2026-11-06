@@ -22,7 +22,7 @@ Everything committed here is public, history included: docs, logs, handoffs, com
 ## Pointers
 
 - `docs/status/` - where the project is right now. Read `docs/status/README.md` first, then the newest handoff in
-  `docs/status/handoffs/`. `CHANGELOG.md` (one line per shipped change) and `open/` hold the rest.
+  `docs/status/handoffs/` (local only, gitignored: never `git add` a handoff). `CHANGELOG.md` (one line per shipped change) and `open/` hold the rest.
 - `docs/PLAN.md` - the design. Change it only to record a decision the owner made, with its date.
 - `docs/ARCHITECTURE.md` - module contracts, data flow, and the invariants every change must keep.
 - `docs/OSS.md` - what we reuse and its licenses. Check before writing anything.
@@ -41,7 +41,7 @@ checks) before creating it.
 | `docs/*.md` | the standing references only: PLAN, ARCHITECTURE, OSS |
 | `docs/systems/` | one spec per system: how it works now |
 | `docs/adr/` | one decision per file, `NNNN-slug.md`, indexed in `README.md` |
-| `docs/status/` | `README.md`, `CHANGELOG.md`, `handoffs/` (newest only), `open/`, `lessons.md`, `rulings.md` |
+| `docs/status/` | `README.md`, `CHANGELOG.md`, `handoffs/` (newest only, gitignored), `open/`, `lessons.md`, `rulings.md` |
 | `docs/log/` | dated work notes and research, `YYYY-MM-DD-topic.md` |
 | `src/` | the app: `boot.ts`, shared plain-JS modules (weather, UI, film, audio, math, ocean spectrum, sky medium) |
 | `src/three/` | the three.js WebGPU renderer (TS, TSL shaders), `docs/systems/three-port.md`; all rendering work goes here |

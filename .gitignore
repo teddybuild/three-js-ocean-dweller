@@ -7,3 +7,4 @@ ffmpeg2pass*
 dist/
 tmp/
 *.mp4
+docs/status/handoffs/
