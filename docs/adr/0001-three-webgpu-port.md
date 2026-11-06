@@ -45,5 +45,4 @@ for browser and Electron, on WebGPU.
 
 ## Evidence
 
-- Plan: kept outside the repo.
-- Inventory and research: `docs/log/2026-10-29-three-port.md`.
+- Plan and research: kept outside the repo.

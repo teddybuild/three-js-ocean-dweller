@@ -8,3 +8,6 @@ dist/
 tmp/
 *.mp4
 docs/status/handoffs/
+docs/log/
+docs/status/rulings.md
+CLAUDE.local.md

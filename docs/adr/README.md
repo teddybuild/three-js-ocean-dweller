@@ -1,7 +1,7 @@
 # Architecture Decision Records
 
 Use ADRs for expensive or hard-to-reverse technical and design choices. Tuning numbers, wording and bug fixes stay in
-`docs/PLAN.md`, `docs/systems/` and `docs/log/`.
+`docs/PLAN.md` and `docs/systems/`.
 
 ## Writing a new one
 

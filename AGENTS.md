@@ -16,6 +16,7 @@ Everything committed here is public, history included: docs, logs, handoffs, com
 
 - Never write a real name, personal email, private host or IP, absolute home path, vault key name or token. Say "the owner".
 - Commits use the GitHub noreply identity (`git config user.email`). Check `git log -1 --format=%ae` before a push.
+- Working notes stay local and gitignored: `docs/log/`, `docs/status/rulings.md`, `docs/status/handoffs/`, `CLAUDE.local.md`.
 - Run `pnpm check:secrets` before a push (`.gitleaks.toml`). CI runs it on every push and pull request.
 - `origin` is GitHub. Contributors work through pull requests (`CONTRIBUTING.md`).
 
@@ -28,7 +29,7 @@ Everything committed here is public, history included: docs, logs, handoffs, com
 - `docs/OSS.md` - what we reuse and its licenses. Check before writing anything.
 - `docs/systems/` - one spec per system. Read the one you're touching; write one before coding a system that has none.
 - `docs/adr/` - decision records (`README.md` is the index). Read before reversing a big choice.
-- `docs/log/` - dated notes, `YYYY-MM-DD-topic.md`. Append, don't rewrite.
+- `docs/log/` - dated notes, `YYYY-MM-DD-topic.md` (local only, gitignored). Append, don't rewrite.
 
 ## Where things go
 
@@ -41,8 +42,8 @@ checks) before creating it.
 | `docs/*.md` | the standing references only: PLAN, ARCHITECTURE, OSS |
 | `docs/systems/` | one spec per system: how it works now |
 | `docs/adr/` | one decision per file, `NNNN-slug.md`, indexed in `README.md` |
-| `docs/status/` | `README.md`, `CHANGELOG.md`, `handoffs/` (newest only, gitignored), `open/`, `lessons.md`, `rulings.md` |
-| `docs/log/` | dated work notes and research, `YYYY-MM-DD-topic.md` |
+| `docs/status/` | `README.md`, `CHANGELOG.md`, `handoffs/` (newest only, gitignored), `open/`, `lessons.md`, `rulings.md` (local only, gitignored) |
+| `docs/log/` | dated work notes and research, `YYYY-MM-DD-topic.md` (local only, gitignored) |
 | `src/` | the app: `boot.ts`, shared plain-JS modules (weather, UI, film, audio, math, ocean spectrum, sky medium) |
 | `src/three/` | the three.js WebGPU renderer (TS, TSL shaders), `docs/systems/three-port.md`; all rendering work goes here |
 | `archive/gl/` | the archived open-water WebGL2 engine and its GL-based tools. Reference only: never edit, never import. Tag `gl-final` runs it |
@@ -57,7 +58,7 @@ entry every session or change, or when it passes 400 lines (the gate fails it): 
 never one file per heading. Do the split as its own commit, fix every pointer (`git grep`).
 
 **Specs say what is, logs say what happened.** Edit specs in place (keep the owner's quote and date on decisions);
-history and numbers go in the day's `docs/log/` file.
+history and numbers go in the commit message and the day's local `docs/log/` file.
 
 ## Commands
 
@@ -76,4 +77,4 @@ history and numbers go in the day's `docs/log/` file.
 ## Workflow
 
 - While working, run only the checks touching the change; run the full gate once when the ask is done.
-- Every owner decision is recorded with their words and the date (spec, ADR, or `docs/status/rulings.md`).
+- Every owner decision is recorded with their words and the date (spec, ADR, or the local `docs/status/rulings.md`).
