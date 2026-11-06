@@ -7,7 +7,7 @@ grouped by topic, merged, never appended blindly. A lesson that can be a check b
 
 - Headless Chrome on Linux needs exactly `--use-angle=vulkan --enable-features=Vulkan --enable-unsafe-webgpu` for a hardware WebGPU adapter; adding `VulkanFromANGLE,DefaultANGLEVulkan` gives none. `navigator.gpu` is missing on `about:blank`.
 - Chrome headless on Linux drops the first WebGL context once (~250 ms, Vulkan compositor surface fails): `launch()` burns it on a warm-up page. A blank reference capture passed the old diff with exit 0.
-- three's NodeFrame only advances in its own rAF loop: fixed steps must stop `renderer._animation` and call `_nodes.nodeFrame.update()` per frame, or passes update once per capture.
+- three's NodeFrame only advances in its own rAF loop: fixed steps must stop `renderer._animation` and call `_nodes.nodeFrame.update()` per frame, or passes update once per capture. Since 0.187 `render()` and `compute()` restart that loop, so stub its `start()` too.
 - three catches pipeline validation errors in its own error scopes and only logs them: read them via `THREE.setConsoleFunction`.
 - A 2D `drawImage` of the WebGPU canvas (also OffscreenCanvas) reads black in headless Chrome while `toDataURL` works: copy `getCurrentTexture()` (COPY_SRC) to a buffer in the frame's task (`app.pixels()`).
 - `node tools/diff.mjs` with no scene runs only breeze: pass `all`, or a scene's sheet is stale. `page.screenshot` of the WebGPU canvas is black in headless: use `tools/shot.mjs` (engine.capture). diff frames are at t = 3 s, shot.mjs defaults to 6 s: pass `3` to compare them.

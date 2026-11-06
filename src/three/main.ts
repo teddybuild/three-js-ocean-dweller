@@ -44,7 +44,8 @@ async function start() {
   // fixed steps own three's frame lifecycle in ?render: its own rAF loop would advance NodeFrame on the wall clock,
   // and without it passes like bloom update once per capture instead of once per frame
   const internals = renderer as any;
-  if (RENDER_MODE) internals._animation.stop();
+  // three 0.187 restarts that loop from render() and compute(), so start() has to go too
+  if (RENDER_MODE) { internals._animation.stop(); internals._animation.start = () => {}; }
 
   // WebGPU errors: uncaptured ones, a validation scope per frame, and the ones three catches in its own error
   // scopes and only logs (pipeline creation), via its console hook

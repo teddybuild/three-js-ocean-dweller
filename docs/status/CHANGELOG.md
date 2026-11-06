@@ -3,6 +3,7 @@
 Every shipped change, newest first: one line each, with its commits. Add a line when a change lands;
 the why and the numbers go in the commit message.
 
+- 2026-11-06 10:10 three.js 0.187: fixed-step render path keeps its animation loop stopped; all scenes pixel-identical.
 - 2026-11-06 09:30 Ready for public release: README, contributor files, gitleaks rules, CI, session notes gitignored.
 - 2026-11-01 10:08 Film render checked after the GL removal: 5 s, 300 frames, audio, no black frames.
 - 2026-11-01 10:05 Cloud towers finished. `1633e80` `31c42b7`

@@ -7,9 +7,9 @@ Every copied or adapted source, its version and license. Hand-written pieces say
 | [Leonxlnx/open-water](https://github.com/Leonxlnx/open-water) | `3d1adaa` in upstream, `4867ce7` in this repo (fork base, remote `upstream`) | MIT (code); audio see `public/audio/CREDITS.md` | everything in `src/`, `tools/`, `render/` |
 | Vite | 8.3.5 | MIT | dev server and build |
 | TypeScript | 7.0.2 | Apache-2.0 | `tsc --noEmit` in the gate |
-| puppeteer-core | 23.11.1 | Apache-2.0 | upstream `tools/` probes, `tools/diff.mjs` |
-| three | 0.186.1 | MIT | WebGPU port (`src/three/`) |
-| @types/three | 0.186.0 | MIT | types for the port |
+| puppeteer-core | 25.16.0 | Apache-2.0 | upstream `tools/` probes, `tools/diff.mjs` |
+| three | 0.187.0 | MIT | WebGPU port (`src/three/`) |
+| @types/three | 0.187.0 | MIT | types for the port |
 | pixelmatch | 8.0.0 | ISC | mismatch % in `tools/diff.mjs` |
 | pngjs | 7.0.0 | MIT | PNG read/write in `tools/diff.mjs` |
 | gitleaks | 8.30.1 | MIT | secret and personal-detail scan, in CI and `pnpm check:secrets`. The binary is used directly because `gitleaks-action` has a custom license. |

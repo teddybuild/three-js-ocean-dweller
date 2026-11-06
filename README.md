@@ -6,7 +6,7 @@ wave, cloud, foam bubble and raindrop is computed. Only rain and thunder sounds 
 [![CI](https://github.com/teddybuild/three-js-ocean-dweller/actions/workflows/ci.yml/badge.svg)](https://github.com/teddybuild/three-js-ocean-dweller/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 ![Renderer: WebGPU](https://img.shields.io/badge/renderer-WebGPU-005a9c.svg)
-![three.js 0.186](https://img.shields.io/badge/three.js-0.186-black.svg)
+![three.js 0.187](https://img.shields.io/badge/three.js-0.187-black.svg)
 
 ![Fair-weather towers backlit by a low sun over a breeze sea](media/now-towers.jpg)
 
