@@ -5,12 +5,12 @@ How the port is built and checked. Decision: `docs/adr/0001-three-webgpu-port.md
 ## Layout
 
 - `src/boot.ts` loads `src/three/main.ts`, the only engine. The WebGL2 engine and its parity tools are in
-  `archive/gl/` (2026-10-29, "archive GL in a folder and stop touching it", owner); tag `gl-final` runs it.
+  `archive/gl/` (2026-10-29); tag `gl-final` runs it.
 - The engine sets `window.engine` = `{ name, step(n, dt), capture(), errors, adapter }`. `step` runs `n` fixed
   steps of the engine's own clock and awaits the GPU and pending error scopes; `capture` renders once and returns a
   PNG data URL read in the same task. A fresh page is the reset; seeds are fixed in code.
 - Clock: the three engine owns `elapsed` and the `uTime` uniform (`src/three/main.ts`). Every animated node reads
-  `uTime`; three's `time` node and NodeFrame follow the wall clock and are never used (Codex M0 review, P1).
+  `uTime`; three's `time` node and NodeFrame follow the wall clock and are never used.
 - Errors (three): `uncapturederror`, device loss, a validation error scope around every frame, and three's own
   logged errors via `THREE.setConsoleFunction` (three catches pipeline errors in its own scopes and only logs them).
 - Shared plain JS: `src/weather.js`, `src/film.js`, `src/ui.js`, `src/audio/`; `src/ocean/spectrum.js`,
@@ -64,7 +64,7 @@ How the port is built and checked. Decision: `docs/adr/0001-three-webgpu-port.md
   scene's reference (`tmp/diff/ref/`); without it each frame is compared to its reference, `tmp/diff/<scene>.png` is
   ref | now, and PSNR under 45 dB fails. `verdict()` also fails on: any page or WebGPU error, a capture that is not
   1280x720 or is one colour, a frame or NodeFrame count other than 90, an adapter that is not nvidia/blackwell
-  (`EXPECT_GPU_ARCH`) or is a fallback. `--self-test` runs 15 synthetic known-bad cases and 2 live ones. Scenes: the
+  (`EXPECT_GPU_VENDOR`, `EXPECT_GPU_ARCH`) or is a fallback. `--self-test` runs 15 synthetic known-bad cases and 2 live ones. Scenes: the
   `SCENES` table (incl. `showers`, `towers`, `night` at elev -12, `rt` the live tier), or any raw query string.
 - `node tools/shot.mjs "<query>" out.png [w h seconds]`: one frame after `seconds` of fixed steps, for looking.
 - `node tools/live-three.mjs`: the live path (no `?render`, q=rt, rAF loop) for 6 s in a storm with a strike at 2 s;

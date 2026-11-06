@@ -1,6 +1,6 @@
 # Lessons
 
-Traps past sessions hit, distilled from the handoffs' Gotchas. Loaded every session (`CLAUDE.md`). One line each,
+Traps past work hit in this codebase. One line each,
 grouped by topic, merged, never appended blindly. A lesson that can be a check becomes a test or hook and leaves this file.
 
 ## Harness
@@ -24,7 +24,7 @@ grouped by topic, merged, never appended blindly. A lesson that can be a check b
 - Cloud code assumes hf <= 1: the sparse-cover sky-light term `(1 - hf)` goes negative above the plain top and brightens it (anything taller than the cumulus layer).
 - Find a world-anchored artifact by elimination: turn one term off per shot (`tools/shot.mjs`), measure column means; guesses at the cause cost two rounds here.
 
-## Porting to TSL/WGSL (Codex, agy, web-ocean-3d)
+## Porting to TSL/WGSL
 
 - Shared uniforms rewritten between compute dispatches overwrite one UBO before submit: one uniform/ComputeNode per FFT stage.
 - `r16float` storage writes need `texture-formats-tier1` (use rgba16float); WGSLNodeBuilder drops the mip level in `textureDimensions()` on storage textures; auto-mips only run on a sampled bind-group update, so a store and the first mip-sampling read go in separate `renderer.compute()` calls (`src/three/sky.ts` renderEnv).

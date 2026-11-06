@@ -11,8 +11,7 @@ Where the project is right now. Read this first, then the newest handoff.
 
 three.js WebGPU is the only engine; the WebGL2 engine is archived in `archive/gl/` (tag `gl-final`). Checks:
 `tools/diff.mjs` (three vs its saved frames), `tools/shot.mjs` (one frame), `tools/live-three.mjs`. Congestus towers
-fitted to the owner's sketch, approved by the owner 2026-11-01. Spec: `docs/systems/three-port.md`.
-Public-repo prep is done and waits on the owner's go.
+fitted to a hand-drawn sketch. Spec: `docs/systems/three-port.md`.
 
 ## How to update
 

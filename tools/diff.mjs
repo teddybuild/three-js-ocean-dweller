@@ -38,8 +38,8 @@ const CROP = { clear: 0.68 };
 // re-renders of the same commit measured Infinity dB, squall 75.6 and rt 80.6 (2026-10-29): below this is a change
 const MIN_PSNR = 45;
 const W = 1280, H = 720, DT = 1 / 30, FRAMES = 90;
-// WebGPU redacts the device to vendor + architecture, which on this one-GPU box is the 5080
-const EXPECT = { vendor: /nvidia/i, architecture: process.env.EXPECT_GPU_ARCH || 'blackwell' };
+// WebGPU redacts the device to vendor + architecture, so that is all the check can match (override for other GPUs)
+const EXPECT = { vendor: new RegExp(process.env.EXPECT_GPU_VENDOR || 'nvidia', 'i'), architecture: process.env.EXPECT_GPU_ARCH || 'blackwell' };
 
 export function psnr(a, b) {
   let se = 0, n = 0;

@@ -42,7 +42,7 @@ async function start() {
   if (!backend.isWebGPUBackend) fail('three fell back to WebGL2; this port needs WebGPU');
   const device: GPUDevice = backend.device;
   // fixed steps own three's frame lifecycle in ?render: its own rAF loop would advance NodeFrame on the wall clock,
-  // and without it passes like bloom update once per capture instead of once per frame (Codex M0 re-review, P1)
+  // and without it passes like bloom update once per capture instead of once per frame
   const internals = renderer as any;
   if (RENDER_MODE) internals._animation.stop();
 

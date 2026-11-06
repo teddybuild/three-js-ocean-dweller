@@ -5,8 +5,7 @@
 
 ## Overview
 
-Endless cinematic ocean in the browser, the web successor to an earlier Godot project (the owner
-dropped Godot on 2026-10-29). Started as a fork of [Leonxlnx/open-water](https://github.com/Leonxlnx/open-water) (MIT, WebGL2):
+Endless cinematic ocean in the browser, the web successor to an earlier Godot project. Started as a fork of [Leonxlnx/open-water](https://github.com/Leonxlnx/open-water) (MIT, WebGL2):
 FFT ocean, atmosphere, volumetric clouds, rain, lightning, sound, now ported to three.js on WebGPU (TSL shaders,
 `src/three/`); the WebGL2 original is archived in `archive/gl/`. Vite + TypeScript. Runs locally in Chrome. Repo: GitHub `teddybuild/three-js-ocean-dweller` (origin); `upstream` = Leonxlnx/open-water.
 
@@ -14,7 +13,7 @@ FFT ocean, atmosphere, volumetric clouds, rain, lightning, sound, now ported to 
 
 Everything committed here is public, history included: docs, logs, handoffs, commit messages and comments.
 
-- Never write a real name, personal email, private host or IP, absolute home path, vault key name or token. Say "the owner".
+- Never write a real name, personal email, private host or IP, absolute home path, vault key name or token. Say "the maintainer".
 - Commits use the GitHub noreply identity (`git config user.email`). Check `git log -1 --format=%ae` before a push.
 - Working notes stay local and gitignored: `docs/log/`, `docs/status/rulings.md`, `docs/status/handoffs/`, `CLAUDE.local.md`.
 - Run `pnpm check:secrets` before a push (`.gitleaks.toml`). CI runs it on every push and pull request.
@@ -24,7 +23,7 @@ Everything committed here is public, history included: docs, logs, handoffs, com
 
 - `docs/status/` - where the project is right now. Read `docs/status/README.md` first, then the newest handoff in
   `docs/status/handoffs/` (local only, gitignored: never `git add` a handoff). `CHANGELOG.md` (one line per shipped change) and `open/` hold the rest.
-- `docs/PLAN.md` - the design. Change it only to record a decision the owner made, with its date.
+- `docs/PLAN.md` - the design. Change it only to record a maintainer decision, with its date.
 - `docs/ARCHITECTURE.md` - module contracts, data flow, and the invariants every change must keep.
 - `docs/OSS.md` - what we reuse and its licenses. Check before writing anything.
 - `docs/systems/` - one spec per system. Read the one you're touching; write one before coding a system that has none.
@@ -57,7 +56,7 @@ checks) before creating it.
 entry every session or change, or when it passes 400 lines (the gate fails it): 4-8 files of roughly 50-250 lines,
 never one file per heading. Do the split as its own commit, fix every pointer (`git grep`).
 
-**Specs say what is, logs say what happened.** Edit specs in place (keep the owner's quote and date on decisions);
+**Specs say what is, logs say what happened.** Edit specs in place (keep the date on decisions);
 history and numbers go in the commit message and the day's local `docs/log/` file.
 
 ## Commands
@@ -77,4 +76,4 @@ history and numbers go in the commit message and the day's local `docs/log/` fil
 ## Workflow
 
 - While working, run only the checks touching the change; run the full gate once when the ask is done.
-- Every owner decision is recorded with their words and the date (spec, ADR, or the local `docs/status/rulings.md`).
+- Every maintainer decision is recorded with its date in a spec or ADR. Their exact words go only in the local `docs/status/rulings.md`.

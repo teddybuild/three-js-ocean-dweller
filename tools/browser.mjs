@@ -19,7 +19,7 @@ export async function launch({ width = 1920, height = 1080 } = {}) {
     headless: 'new',
     protocolTimeout: 0,
     args: [
-      // (Linux: these three flags give a hardware WebGPU adapter in headless Chrome 156 on the RTX 5080, 2026-10-29)
+      // (Linux: these three flags give a hardware WebGPU adapter in headless Chrome 156 on an NVIDIA GPU, 2026-10-29)
       ...(process.platform === 'linux' ? ['--use-angle=vulkan', '--enable-features=Vulkan', '--enable-unsafe-webgpu'] : ['--use-angle=d3d11']),
       '--enable-gpu',
       '--ignore-gpu-blocklist',

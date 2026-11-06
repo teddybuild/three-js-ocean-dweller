@@ -2,13 +2,11 @@
 
 ## Status
 
-Accepted 2026-10-29. Owner: "ok i want the full port"; port location "Same repo, side by side"; fidelity "Same feel,
-freedom to change"; "after each milestone you need to have codex and agy check" (reversed 2026-10-29: "new rule just
-iterate fast and then at end have reviews done").
+Accepted 2026-10-29. A full port in the same repo, side by side. Fidelity: same feel, with freedom to change.
 
 ## Context
 
-The repo runs open-water's own WebGL2 renderer (29 GPU programs, 2,510 GLSL lines). Owner wants one three.js engine
+The repo runs open-water's own WebGL2 renderer (29 GPU programs, 2,510 GLSL lines). The goal is one three.js engine
 for browser and Electron, on WebGPU.
 
 ## Decision
@@ -16,11 +14,11 @@ for browser and Electron, on WebGPU.
 - three `0.186.1` (MIT), `WebGPURenderer` + TSL + `RenderPipeline`. `@types/three` `0.186.0` (MIT).
 - WebGPU only. The renderer refuses three's WebGL2 fallback (`src/three/main.ts`).
 - New code in `src/three/` (TS). `src/boot.ts` picks the engine: the WebGPU port, or `?engine=gl` for the WebGL2
-  reference. The default flipped to three on 2026-10-29: Owner approved parity ("Yes, merge flip").
-- Hand port, milestone order from the Codex plan review: harness, FFT alone, atmosphere + sky + exposure, water,
+  reference. The default flipped to three on 2026-10-29, once parity was approved.
+- Hand port, milestone order from a plan review: harness, FFT alone, atmosphere + sky + exposure, water,
   clouds, weather fx, parity (`docs/systems/three-port.md`).
-- Each milestone ends with `pnpm check` and `node tools/diff.mjs`, then a `port-m<N>` tag. Independent Codex and agy
-  reviews run once, at the end of the port.
+- Each milestone ends with `pnpm check` and `node tools/diff.mjs`, then a `port-m<N>` tag. Independent reviews
+  run once, at the end of the port.
 
 ## Why
 
@@ -40,9 +38,8 @@ for browser and Electron, on WebGPU.
 
 ## Update 2026-10-29
 
-- GL archived: "stop working on GL", "archive GL in a folder and stop touching it" (owner). `archive/gl/`, tag
-  `gl-final`; `?engine=gl` is gone. The regression check compares three.js against its own saved frames.
+- GL archived in `archive/gl/`, tag `gl-final`; `?engine=gl` is gone. The regression check compares three.js against its own saved frames.
 
 ## Evidence
 
-- Plan and research: kept outside the repo.
+- Milestones and resource contracts: `docs/systems/three-port.md`.

@@ -18,7 +18,7 @@ body:
     id: system
     attributes:
       label: Browser, OS and GPU
-      placeholder: Chrome 156, Linux, RTX 5080
+      placeholder: Chrome, Linux, NVIDIA GeForce
     validations:
       required: true
   - type: textarea

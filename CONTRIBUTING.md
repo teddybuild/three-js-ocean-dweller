@@ -22,6 +22,7 @@ pnpm dev
    node tools/diff.mjs all
    ```
    The sheets land in `tmp/diff/<scene>.png`, with the reference on the left. Attach the relevant ones to the pull request.
+   The tool expects an NVIDIA Blackwell GPU, so set `EXPECT_GPU_VENDOR` and `EXPECT_GPU_ARCH` for any other adapter.
 3. Run `node tools/live-three.mjs` if you touched the render loop, interface or audio.
 4. Run `pnpm check:secrets` if you have [gitleaks](https://github.com/gitleaks/gitleaks) installed. CI runs it too.
 

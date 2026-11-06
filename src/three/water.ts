@@ -10,8 +10,7 @@ import * as TSL from 'three/tsl';
 import { atmoU } from './atmosphere';
 import type { SkyCompute } from './sky';
 
-// Sea grade: reflected sky and water body x SEA_GRADE; sun glints and foam stay full. "Darker grade" (owner,
-// 2026-10-29).
+// Sea grade: reflected sky and water body x SEA_GRADE; sun glints and foam stay full.
 const SEA_GRADE = 0.7;
 import { foamCoverage } from './foam';
 

@@ -21,7 +21,7 @@ const {
 const PI = 3.14159265;
 const RG_M = 6360000.0;
 const SCUD_BASE = 260.0;
-// Fair-weather towers (congestus), fitted to the owner's sketch (2026-10-29): 3.6 km tall on a 2.2 km base. The width
+// Fair-weather towers (congestus), fitted to a hand-drawn sketch (2026-10-29): 3.6 km tall on a 2.2 km base. The width
 // holds the base's over the lowest 15%, narrows to 0.47 of it by 45% and domes over the top 12%; ~250 m puffs.
 // One candidate per TOWER_CELL square, kept where its centre stands in cloud; none under a storm deck.
 const TOWER_M = 2000.0; // the tallest top above the plain cumulus top (m)
