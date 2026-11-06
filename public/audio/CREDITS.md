@@ -1,5 +1,7 @@
 # Audio credits
 
+The recordings in this folder are not covered by the MIT License in `LICENSE`.
+
 The sea, wind and rain-fizz layers are synthesized at runtime. The recorded layers below are
 excerpts (trimmed, faded, loudness-normalized, re-encoded as MP3) of openly licensed recordings
 from Wikimedia Commons. Each derived file is shared under the same license as its source.
