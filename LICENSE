@@ -21,5 +21,5 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
-The audio recordings in assets/audio are not covered by this license; see
-assets/audio/CREDITS.md for their authors and Creative Commons licenses.
+The audio recordings in public/audio are not covered by this license; see
+public/audio/CREDITS.md for their authors and Creative Commons licenses.

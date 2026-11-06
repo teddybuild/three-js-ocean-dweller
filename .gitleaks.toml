@@ -4,7 +4,7 @@
 useDefault = true
 
 [allowlist]
-paths = ['''pnpm-lock\.yaml''', '''\.gitleaks\.toml''', '''^media/''', '''\.mp3$''']
+paths = ['''pnpm-lock\.yaml''', '''\.gitleaks\.toml''', '''^media/[^/]+\.(jpg|png)$''', '''^public/audio/[^/]+\.mp3$''']
 
 [[rules]]
 id = "email-address"

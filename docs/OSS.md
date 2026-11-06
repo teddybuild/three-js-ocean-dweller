@@ -4,7 +4,7 @@ Every copied or adapted source, its version and license. Hand-written pieces say
 
 | What | Version | License | Used for |
 |---|---|---|---|
-| [Leonxlnx/open-water](https://github.com/Leonxlnx/open-water) | `3d1adaa` in upstream (fork base, remote `upstream`) | MIT (code); audio see `public/audio/CREDITS.md` | everything in `src/`, `tools/`, `render/` |
+| [Leonxlnx/open-water](https://github.com/Leonxlnx/open-water) | `3d1adaa` in upstream, `4867ce7` in this repo (fork base, remote `upstream`) | MIT (code); audio see `public/audio/CREDITS.md` | everything in `src/`, `tools/`, `render/` |
 | Vite | 8.3.5 | MIT | dev server and build |
 | TypeScript | 7.0.2 | Apache-2.0 | `tsc --noEmit` in the gate |
 | puppeteer-core | 23.11.1 | Apache-2.0 | upstream `tools/` probes, `tools/diff.mjs` |
