@@ -6,3 +6,4 @@ frames/
 ffmpeg2pass*
 dist/
 tmp/
+*.mp4

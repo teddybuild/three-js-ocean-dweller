@@ -1,0 +1,36 @@
+# gitleaks' default secret rules, plus personal details that must not reach this public repo.
+# The default config allowlists any secret that looks like /home/... or /Users/..., so the path rules capture only the user name.
+[extend]
+useDefault = true
+
+[allowlist]
+paths = ['''pnpm-lock\.yaml''', '''\.gitleaks\.toml''', '''^media/''', '''\.mp3$''']
+
+[[rules]]
+id = "email-address"
+description = "Email address"
+regex = '''\b[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}\b'''
+[[rules.allowlists]]
+regexes = ['''@users\.noreply\.github\.com$''', '''^noreply@anthropic\.com$''', '''@example\.(?:com|org)$''', '''^git@github\.com$''']
+
+[[rules]]
+id = "home-path"
+description = "Absolute path into a home directory"
+regex = '''(?:/home|/Users)/([A-Za-z][A-Za-z0-9_-]*)/'''
+secretGroup = 1
+
+[[rules]]
+id = "windows-home-path"
+description = "Absolute path into a Windows home directory"
+regex = '''[A-Za-z]:\\Users\\([^\\\s]+)'''
+secretGroup = 1
+
+[[rules]]
+id = "tilde-path"
+description = "Path into a home directory"
+regex = '''~/(?:Downloads|Documents|Desktop|docs|dev|\.[a-z][a-z0-9_-]*)'''
+
+[[rules]]
+id = "private-ipv4"
+description = "Private network address"
+regex = '''\b(?:10\.\d{1,3}\.\d{1,3}\.\d{1,3}|192\.168\.\d{1,3}\.\d{1,3}|172\.(?:1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3})\b'''

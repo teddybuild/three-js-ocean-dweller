@@ -1,0 +1,173 @@
+# Simulation
+
+What the renderer computes and how it was checked. This text comes from upstream open-water and describes its WebGL2
+engine. The three.js port in `src/three/` keeps the same model. Tool results in `archive/gl/tools/` were measured on
+the archived engine, and `docs/systems/three-port.md` holds the port's own checks.
+
+## What is simulated
+
+**Waves.** Tessendorf FFT synthesis on the GPU with four cascades (1800 m down to 3.7 m, so a gale's
+~300 m peak is carried by several modes and forms wave groups) and
+capillary-gravity dispersion. The wind sea uses the Elfouhaily et al. (1997) unified spectrum,
+whose short-wave regime is calibrated to Cox–Munk slope statistics. Spreading is Donelan–Banner
+near the peak and ECKV for short waves, and, for the shorter waves, blended toward a broad
+cos²ˢ spread as the wind approaches a gale (a confused storm sea under long-crested dominant waves),
+plus a narrow-band swell. Choppy displacement gives
+trochoidal crests, steeper as the wind rises (young storm seas). Significant wave heights match the Beaufort table (Bf 5: 2.1 m, Bf 7: 4.8 m,
+Bf 9: 9.2 m), and the GPU statistics are checked against the spectrum (`archive/gl/tools/hscheck.mjs`, measured on the archived WebGL2 engine).
+
+**Light on water.** A slope-variance (LEAN) BRDF after Bruneton, Neyret and Holzschuch (2010)
+makes geometry, normals and BRDF hand over seamlessly. Sub-cascade roughness is the Cox–Munk
+remainder, and no pixel may hold more slope variance than the whole surface has. Sun glitter is
+carried by individual capillary facets: a pixel footprint holding N facets shows on average
+λ = E[L]·Ω☉ / (F·L☉)·N glints, sampled as a Poisson count, so the near field is discrete,
+full-brightness sparkles on dark water and the far field converges to the smooth glitter path.
+Near the camera the glinting facets are larger, so sparkles are fewer and brighter; each one's
+brightness varies, lasts a few frames, and at grazing angles is drawn out along the foreshortened
+wave. A rough sea blurs the reflected sky mostly in elevation: tilting a facet
+sideways turns a grazing reflection by only about el·tan(e) in azimuth. A ray reflected below the
+horizon sees the next wave. Also modeled: averaged Fresnel, water-leaving radiance from ocean-optics remote-sensing
+reflectance (deep ultramarine that turns grey-green as breaking waves fill the water with
+bubbles), backlit crest scattering, cloud shadows drifting over the sea, Earth curvature and
+aerial perspective.
+
+**Foam.** Whitecaps form where the surface Jacobian folds. Two stages are tracked: active
+breaking (dense froth that lives about 0.4 s) and residual foam (seconds to tens of seconds).
+Both are drawn as the probability that a procedural bubble-raft pattern lies below the local
+foam density, so a whitecap is solid only at its core, its rim frays into filaments, and old foam
+opens up along the raft network into lace instead of shrinking as a blob. Crests break in
+segments of a few metres along the crest. Residual foam lives from about a second in a breeze to
+twenty seconds in a gale and fades out as it thins, and at gale force gathers into narrow,
+meandering wind rows tens of metres long. Fresh caps have an opaque white core; foam is a
+translucent layer over the water, never darker than it. The breaking
+threshold is expressed in standard deviations of the Jacobian and calibrated so coverage follows
+the Monahan & O'Muircheartaigh (1980) whitecap law within about 20% from 8 to 21 m/s, with active
+breaking about 35-55% of it
+(`archive/gl/tools/foam.mjs`).
+
+**Sky.** The atmosphere follows Hillaire (2020): transmittance, multiple-scattering, sky-view
+and aerial-perspective LUTs. Clouds are volumetric, built from procedural Perlin–Worley noise
+with Beer–powder lighting, Wrenninge multiple-scattering octaves and two-stream diffusion
+through thick storm decks (a deck transmits E·μ₀·T/π). Faces turned to the camera reflect the
+sky and sea light behind it, so a storm's shadowed side is dark blue-grey, not black and not
+glowing. The marine aerosol scatters with a three-lobe phase function (a sharp core inside a graded aureole, a little backscatter) and has a realistic load (visibility around 100 km in clean air, a few
+tens of km in a storm), which gives the solar aureole, hazy golden horizons and distant clouds
+fading out. The cloud pass also records how far away its light comes from, so rain and mist are
+drawn in front of a cloud only up to that distance.
+
+A squall line moves the weather across the sea along a meandering front. It is a row of
+cumulonimbus cells about 10 km tall whose anvil overhangs ahead of the line; its face is
+displaced by kilometre-scale 3D noise that grows with height, so the towers bulge and recede.
+Haze standing in the storm's shadow scatters no direct sunlight, and neither do its rain
+curtains. Scud races beneath the storm near the camera. Storm clouds are optically thick like real
+cumulonimbus (shaded faces at about half the sky's radiance), and the rain curtains carry broad,
+uneven shafts that reach up into the cloud base. A storm deck is mottled from below, its optical thickness
+varying two- to threefold over a few kilometres, and rain falls in drifting cells a few kilometres across
+rather than as one uniform sheet, so light rain leaves gaps that show the deck and the sea beyond.
+Crepuscular rays are traced through the haze using the cloud-shadow map.
+Spindrift is torn off actively breaking crests at gale force and drawn out along the wind, and
+spray haze hugs the sea.
+
+**Rain and storm.** Drop sizes follow Marshall–Palmer, with terminal velocities from Atlas et
+al. (1973). Streak photometry follows Garg & Nayar: a drop covers its streak only D/(v·T) of
+the exposure. Ring waves expand at the capillary minimum speed, every impact leaves a
+centimetre-wide crater that relaxes in about 60 ms (some 2,600 per square metre and second in
+the heaviest rain), and splashes are crowns a few millimetres tall that last about 50 ms; only
+the largest drops throw 2–4 cm Worthington jets. Rain curtains have shafts, and visibility falls
+with rain rate (Atlas: β = 0.336·10⁻³ R^0.63 per metre). Rain barely absorbs, so a layer several
+optical depths thick is lit by the light entering it from the cloud deck and scatters it many
+times: rain greys the view without blacking out the day, and no direct sun reaches it under a
+closed deck. Lightning has multiple
+return strokes, a tortuous fractal channel whose branches taper and dim, and in-cloud
+illumination. It lights the scene with
+I/d² (about 100 lux at 1 km) relative to sun- or moonlight, so a daytime strike barely brightens
+the sea, while at night it outshines the moon. The channel is hidden inside the cloud and dimmed
+by the rain between it and the viewer. Thunder arrives at 343 m/s and loses its high frequencies
+with distance.
+
+**Night.** The full moon takes over as the light source after civil twilight. This gives a
+moon glitter path, moonlit clouds and a halo in the haze. Stars are point sources with physical
+flux: the magnitude distribution N(<m) ∝ 10^(0.5m), colour temperatures, extinction, and
+scintillation near the horizon. They show only once the sky is dark enough. A scotopic
+(Purkinje) shift drains colour and tints the low light blue.
+
+**Camera and image.** The camera floats on the sea, heaving, pitching and rolling with waves
+longer than a small boat. Exposure meters the incident light, but meters the bright sky when
+shooting into a low sun, as a photographer would, and storms are exposed dark. White balance is
+near daylight, so golden hour stays gold; under a closed overcast it partly neutralises the
+cool light within a camera's AWB range. AgX tone mapping is followed by a photographic S-curve,
+plus a bloom with geometrically falling level weights (a tight lens core, a faint wide skirt)
+and film grain.
+
+**Sound.** Sea wash, whitecap hiss and gusting wind are synthesized from the same weather state;
+the noise beds loop seamlessly and water slaps against the hull as soft, low thuds.
+Rain and thunder are recordings. The film's soundtrack is rendered by the same engine in an
+`OfflineAudioContext`.
+
+## How it was checked
+
+Every visual decision was compared against real photographs, side by side (`archive/gl/tools/compare.mjs`).
+The references were the NOAA Beaufort-scale series, open-ocean, overcast, rain-squall and storm
+photography. The measurable parts are checked with tools:
+
+| Quantity | Target | Result |
+| --- | --- | --- |
+| Significant wave height, Bf 5 / 7 / 9 (`archive/gl/tools/hscheck.mjs`) | 2–2.5 / 4–5.5 / 7–10 m | 2.1 / 4.8 / 9.2 m |
+| GPU height variance vs. spectrum integral | equal | within sampling error (±10%) |
+| Whitecap coverage at 8.5 / 11 / 15 / 21 m/s, steady state (`archive/gl/tools/foam.mjs`) | Monahan 0.57 / 1.37 / 3.9 / 12.4 % | 0.52 / 1.24 / 3.2 / 12.8 % (pixels with foam over half opaque); actively breaking 0.27 / 0.46 / 1.2 / 4.5 % |
+| Thunder delay | distance / 343 m/s | exact |
+| Visibility in the heaviest rain (Koschmieder, 3.9 / β) | ~2–3 km | 3.0 km |
+| Tonal range vs. reference photos (`tools/tonestats.mjs`) | p10 ≈ 5–45, highlights ≈ 230–255 | shadows deepened, highlights reach white |
+| Lightning illuminance at 1 km (daytime) | ~100 lux on ~2000 lux storm light | +5% |
+
+Side by side with NOAA's Beaufort-scale photographs. The render is on the left, seen from a ship's
+deck 14 m up. The photos are from the NOAA Photo Library (public domain) and carry their film
+stock's colour cast. At force 9 the photo's sea is darker and its foam lace finer than the render's.
+
+| Force 5 (8.5 m/s) | Force 7 (15 m/s) | Force 9 (21 m/s) |
+| --- | --- | --- |
+| ![Beaufort 5: render vs photo](../../media/compare-beaufort-5.jpg) | ![Beaufort 7: render vs photo](../../media/compare-beaufort-7.jpg) | ![Beaufort 9: render vs photo](../../media/compare-beaufort-9.jpg) |
+
+A multi-agent review compared 13 scenes with real photographs and had independent judges confirm
+each discrepancy. A second adversarial code review then confirmed 30 bugs, every one fixed. In
+later rounds two critics per scene (a photographer and an ocean and atmosphere physicist) scored
+the renders against some 60 reference photographs (Wikimedia Commons, NOAA), a verifier
+confirmed each issue, and a regression judge compared every scene with the previous round.
+Problems found and fixed this way included:
+- Rain blacking out the day: the rain was lit by its own dimmed light, leaving only warm stray sun.
+- Khaki, mottled storm seas: a rough sea averaged the sun's aureole into every sky reflection.
+- Cloud history lagging behind the film's time-lapse squall front as feathered echo bands.
+- Contour bands on storm bases from ray-march samples at identical depths.
+- A cloud march that ran out of steps before reaching a storm 20 km away.
+- The storm sea's directional spreading computed but never applied.
+- Sun glitter rendered as a milky sheet instead of sparkles.
+- Whitecaps missing at Bf 5.
+- Overcast decks without texture (a flat base and too little thickness variation).
+- A brown cast from sunlit haze under a storm deck.
+- Hairline crest artifacts from mirrored downward reflections.
+- Foam outlines with polygonal edges from thresholding a bilinear field.
+- Waves travelling against the wind (sign of the time evolution).
+- A NaN sea below 2.2 m/s wind (negative Elfouhaily short-wave coefficient).
+- A veiled, compressed tonal range (highlights never above ~190/255).
+- Whitecaps unrelated to the dominant crests.
+- A seam in the sky reflection.
+- Lightning washing the whole frame out in daylight.
+
+## References
+
+- J. Tessendorf, *Simulating Ocean Water*, SIGGRAPH course notes, 2001.
+- T. Elfouhaily, B. Chapron, K. Katsaros, D. Vandemark, *A unified directional spectrum for long
+  and short wind-driven waves*, JGR 102(C7), 1997.
+- M. Donelan, J. Hamilton, W. Hui, *Directional spectra of wind-generated waves*, 1985.
+- E. Bruneton, F. Neyret, N. Holzschuch, *Real-time Realistic Ocean Lighting using Seamless
+  Transitions from Geometry to BRDF*, Computer Graphics Forum, 2010.
+- C. Cox, W. Munk, *Measurement of the Roughness of the Sea Surface from Photographs of the
+  Sun's Glitter*, JOSA, 1954.
+- E. Monahan, I. O'Muircheartaigh, *Optimal power-law description of oceanic whitecap coverage
+  dependence on wind speed*, JPO, 1980.
+- S. Hillaire, *A Scalable and Production Ready Sky and Atmosphere Rendering Technique*, EGSR 2020.
+- A. Schneider, *The Real-time Volumetric Cloudscapes of Horizon Zero Dawn*, SIGGRAPH 2015.
+- M. Wrenninge et al., *Oz: The Great and Volumetric*, SIGGRAPH 2013 talk.
+- K. Garg, S. Nayar, *Photorealistic Rendering of Rain Streaks*, SIGGRAPH 2006.
+- J. Marshall, W. Palmer, *The distribution of raindrops with size*, 1948.
+- T. Sobotka, AgX display transform.

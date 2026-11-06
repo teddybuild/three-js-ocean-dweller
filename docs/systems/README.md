@@ -5,3 +5,4 @@ One spec per system, describing how it works today. A big system is a folder (`n
 ## Specs
 
 - [three-port.md](three-port.md) - the three.js WebGPU port: engine switch, diff tool, resource contracts.
+- [simulation.md](simulation.md) - the physics and optics: waves, light, foam, sky, rain, night, camera, sound, and how each was checked.

@@ -1,0 +1,15 @@
+name: Feature request
+description: A new effect, weather type or tool
+labels: [enhancement]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What you want to see
+      description: Reference photos or papers help.
+    validations:
+      required: true
+  - type: textarea
+    id: how
+    attributes:
+      label: How it could work

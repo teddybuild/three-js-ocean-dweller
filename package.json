@@ -3,12 +3,13 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Ocean dweller on the web: open-water's FFT ocean, sky and weather (WebGL2), three.js next.",
+  "description": "An endless, physically based ocean in the browser: three.js on WebGPU, FFT waves, volumetric clouds, weather and sound.",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
     "check": "tsc --noEmit && vite build",
+    "check:secrets": "gitleaks git --config .gitleaks.toml --redact --no-banner",
     "shot": "node tools/shot.mjs",
     "render": "node render/render.mjs"
   },
@@ -22,5 +23,15 @@
   },
   "dependencies": {
     "three": "0.186.1"
-  }
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/teddybuild/three-js-ocean-dweller.git"
+  },
+  "bugs": {
+    "url": "https://github.com/teddybuild/three-js-ocean-dweller/issues"
+  },
+  "homepage": "https://github.com/teddybuild/three-js-ocean-dweller#readme",
+  "packageManager": "pnpm@11.9.0"
 }

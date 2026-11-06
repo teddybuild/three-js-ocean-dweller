@@ -10,6 +10,15 @@ dropped Godot on 2026-10-29). Started as a fork of [Leonxlnx/open-water](https:/
 FFT ocean, atmosphere, volumetric clouds, rain, lightning, sound, now ported to three.js on WebGPU (TSL shaders,
 `src/three/`); the WebGL2 original is archived in `archive/gl/`. Vite + TypeScript. Runs locally in Chrome. Repo: GitHub `teddybuild/three-js-ocean-dweller` (origin); `upstream` = Leonxlnx/open-water.
 
+## Public repo
+
+Everything committed here is public, history included: docs, logs, handoffs, commit messages and comments.
+
+- Never write a real name, personal email, private host or IP, absolute home path, vault key name or token. Say "the owner".
+- Commits use the GitHub noreply identity (`git config user.email`). Check `git log -1 --format=%ae` before a push.
+- Run `pnpm check:secrets` before a push (`.gitleaks.toml`). CI runs it on every push and pull request.
+- `origin` is GitHub. Contributors work through pull requests (`CONTRIBUTING.md`).
+
 ## Pointers
 
 - `docs/status/` - where the project is right now. Read `docs/status/README.md` first, then the newest handoff in
@@ -28,7 +37,7 @@ checks) before creating it.
 
 | Path | What lives there |
 |---|---|
-| repo root | config only, plus `README.md`, `AGENTS.md`, `CLAUDE.md`. No notes, scripts or scratch. |
+| repo root | config only, plus `README.md`, `AGENTS.md`, `CLAUDE.md`, `CONTRIBUTING.md`, `SECURITY.md`, `CODE_OF_CONDUCT.md`. No notes, scripts or scratch. |
 | `docs/*.md` | the standing references only: PLAN, ARCHITECTURE, OSS |
 | `docs/systems/` | one spec per system: how it works now |
 | `docs/adr/` | one decision per file, `NNNN-slug.md`, indexed in `README.md` |
@@ -39,7 +48,8 @@ checks) before creating it.
 | `archive/gl/` | the archived open-water WebGL2 engine and its GL-based tools. Reference only: never edit, never import. Tag `gl-final` runs it |
 | `public/audio/` | recorded rain and thunder (`CREDITS.md`), served at `/audio/` |
 | `tools/`, `render/` | upstream puppeteer probes and the offline film renderer; they expect the dev server on :5173 |
-| `media/` | upstream README images and film |
+| `media/` | README images: `now-*.jpg` from this engine, the rest from upstream. Video stays out of git (`*.mp4` is ignored). |
+| `.github/` | CI workflow, Dependabot, issue and pull request templates |
 | `tmp/` (gitignored) | scratch. Never the only copy of anything worth keeping |
 
 **When a file becomes a folder.** Split a doc into `name/README.md` (the index) plus topic files when it gains an
@@ -52,6 +62,7 @@ history and numbers go in the day's `docs/log/` file.
 ## Commands
 
 - `pnpm check` - the gate (`tsc --noEmit && vite build`). Must pass before any push.
+- `pnpm check:secrets` - gitleaks over all history with `.gitleaks.toml`. CI runs it too.
 - `pnpm dev` - dev server on http://localhost:5173 (port fixed for `tools/`). `pnpm preview` serves `dist/` on :4173.
 - URL flags: see `src/three/main.ts` (`?render`, presets, `yaw`, `pitch`, `elev`, any weather key).
 - `node tools/shot.mjs "<query>" out.png [w h seconds]` - one three.js frame to a PNG (headless, deterministic).

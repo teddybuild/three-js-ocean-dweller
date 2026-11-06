@@ -1,0 +1,28 @@
+name: Bug report
+description: Something renders wrong, crashes or runs slowly
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: Add a screenshot if the problem is visual.
+    validations:
+      required: true
+  - type: input
+    id: url
+    attributes:
+      label: URL parameters
+      description: The query string that shows the problem, for example ?preset=storm&yaw=90
+  - type: input
+    id: system
+    attributes:
+      label: Browser, OS and GPU
+      placeholder: Chrome 156, Linux, RTX 5080
+    validations:
+      required: true
+  - type: textarea
+    id: console
+    attributes:
+      label: Console errors
+      render: text
